@@ -658,7 +658,36 @@
         <div class="menu-item" onclick="initDownload()">Baixar</div>
     </div>
 
-    <div id="share-folder-modal" class="modal-overlay">
+        <div id="setup-runtime-modal" class="modal-overlay">
+            <div class="modal-content" style="max-width: 500px; height: auto;">
+                <div class="modal-header">
+                    <h3>Configuração de Motores 🛠️</h3>
+                    <div style="flex: 1"></div>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div id="setup-initial">
+                        <p style="font-size: 0.95rem; margin-bottom: 1.5rem; color: var(--text-dim);">Detectamos que este computador ainda não possui os motores necessários (MySQL) para rodar apps como WordPress.</p>
+                        
+                        <div style="background: #eff6ff; padding: 1rem; border-radius: 8px; border-left: 4px solid var(--accent); margin-bottom: 1.5rem;">
+                            <p style="font-size: 0.85rem; color: var(--accent); font-weight: 500;">O OptiNode pode baixar e configurar uma versão portátil do MariaDB automaticamente para você.</p>
+                        </div>
+
+                        <button onclick="startRuntimeSetup()" class="btn-login" style="width: 100%;">Baixar e Configurar Motores (~100MB)</button>
+                        <p style="text-align: center; font-size: 0.75rem; margin-top: 1rem; color: var(--text-dim); cursor: pointer;" onclick="document.getElementById('setup-runtime-modal').classList.remove('active')">Não, vou configurar manualmente depois</p>
+                    </div>
+
+                    <div id="setup-running" style="display: none;">
+                        <div class="loading-spinner" style="margin: 2rem auto;"></div>
+                        <p id="setup-status-text" style="text-align: center; font-weight: 500; color: var(--text);">Baixando MariaDB...</p>
+                        <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; margin-top: 1rem; overflow: hidden;">
+                            <div id="setup-progress-bar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="share-folder-modal" class="modal-overlay">
         <div class="modal-content" style="max-width: 500px; height: auto;">
             <div class="modal-header">
                 <h3>Compartilhamento de Rede 📂</h3>
@@ -1514,6 +1543,46 @@
             if (document.getElementById('apps-view').classList.contains('active')) {
                 renderApps();
             }
+        });
+
+        async function checkRuntimes() {
+            try {
+                const r = await fetch('/api/system/check-runtime');
+                const d = await r.json();
+                if (!d.mysqlInstalled && !d.apacheInstalled) {
+                    document.getElementById('setup-runtime-modal').classList.add('active');
+                }
+            } catch (e) {}
+        }
+
+        async function startRuntimeSetup() {
+            document.getElementById('setup-initial').style.display = 'none';
+            document.getElementById('setup-running').style.display = 'block';
+            
+            await fetch('/api/system/setup-runtime', { method: 'POST' });
+            
+            const poller = setInterval(async () => {
+                const r = await fetch('/api/system/setup-status');
+                const d = await r.json();
+                
+                if (d.error) {
+                    clearInterval(poller);
+                    alert("Erro no setup: " + d.error);
+                    document.getElementById('setup-runtime-modal').classList.remove('active');
+                } else if (d.success) {
+                    clearInterval(poller);
+                    document.getElementById('setup-status-text').innerText = "Concluído! Reiniciando...";
+                    document.getElementById('setup-progress-bar').style.width = "100%";
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    document.getElementById('setup-status-text').innerText = d.status;
+                    document.getElementById('setup-progress-bar').style.width = d.percent + "%";
+                }
+            }, 1000);
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(checkRuntimes, 2000);
         });
     </script>
 </body>

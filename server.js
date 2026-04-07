@@ -11,18 +11,47 @@ const fsPromises = require('fs').promises;
 const archiver = require('archiver');
 const os = require('os');
 
-const APPS_FILE = path.join(__dirname, 'apps.json');
+const APPS_DIR = 'C:\\OptiNode\\apps';
+const DATA_DIR = 'C:\\OptiNode\\data';
+const RUNTIME_DIR = 'C:\\OptiNode\\runtime';
+
+// Ensure basic structure exists
+[APPS_DIR, DATA_DIR, RUNTIME_DIR].forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+function getMySQLPaths() {
+  const localMySQL = path.join(RUNTIME_DIR, 'mysql', 'bin', 'mysqld.exe');
+  const localConfig = path.join(RUNTIME_DIR, 'mysql', 'bin', 'my.ini');
+  
+  if (fs.existsSync(localMySQL)) {
+    return { bin: localMySQL, config: localConfig };
+  }
+  
+  return {
+    bin: 'C:\\xampp\\mysql\\bin\\mysqld.exe',
+    config: 'C:\\xampp\\mysql\\bin\\my.ini'
+  };
+}
+
+function getApachePaths() {
+  const localApache = path.join(RUNTIME_DIR, 'apache', 'bin', 'httpd.exe');
+  const localConfig = path.join(RUNTIME_DIR, 'apache', 'conf', 'httpd.conf');
+  
+  if (fs.existsSync(localApache)) {
+    return { bin: localApache, config: localConfig };
+  }
+
+  return {
+    bin: 'C:\\xampp\\apache\\bin\\httpd.exe',
+    config: 'C:\\xampp\\apache\\conf\\httpd.conf'
+  };
+}
+
+let setupStatus = { isRunning: false, percent: 0, status: '' };
 let installingApps = {};
 let appProcesses = {}; // Store running child processes
 
-// Root Directories for modern apps (outside XAMPP)
-const OPTINODE_ROOT = 'C:\\OptiNode';
-const APPS_DIR = path.join(OPTINODE_ROOT, 'apps');
-const DATA_DIR = path.join(OPTINODE_ROOT, 'data');
-
-// Ensure root structure exists
-if (!fs.existsSync(OPTINODE_ROOT)) fs.mkdirSync(OPTINODE_ROOT, { recursive: true });
-if (!fs.existsSync(APPS_DIR)) fs.mkdirSync(APPS_DIR, { recursive: true });
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // Helper: Get local IP
@@ -96,6 +125,50 @@ app.post('/api/auth/login', (req, res) => {
   } else {
     res.status(401).json({ error: 'Credenciais inválidas' });
   }
+});
+app.get('/api/system/check-runtime', checkAuth, (req, res) => {
+    const mysql = getMySQLPaths();
+    const apache = getApachePaths();
+    res.json({
+        mysqlInstalled: fs.existsSync(mysql.bin),
+        apacheInstalled: fs.existsSync(apache.bin),
+        isPortable: mysql.bin.includes('OptiNode')
+    });
+});
+
+app.post('/api/system/setup-runtime', checkAuth, (req, res) => {
+    if (setupStatus.isRunning) return res.status(400).json({ error: 'Já existe um setup em andamento.' });
+    
+    setupStatus = { isRunning: true, percent: 10, status: 'Iniciando download do MariaDB...' };
+    res.json({ success: true });
+
+    const { exec } = require('child_process');
+    const zipUrl = "https://archive.mariadb.org/mariadb-10.6.11/winx64-packages/mariadb-10.6.11-winx64.zip";
+    const dest = path.join(RUNTIME_DIR, 'mariadb.zip');
+    
+    // Command sequence: Download -> Unzip -> Rename -> Cleanup
+    const psCmd = `
+        Write-Host "Baixando MariaDB...";
+        Invoke-WebRequest -Uri "${zipUrl}" -OutFile "${dest}";
+        Write-Host "Extraindo...";
+        Expand-Archive -Path "${dest}" -DestinationPath "${RUNTIME_DIR}" -Force;
+        Rename-Item -Path "${path.join(RUNTIME_DIR, 'mariadb-10.6.11-winx64')}" -NewName "mysql";
+        Remove-Item "${dest}" -Force;
+    `;
+
+    exec(`powershell -Command "${psCmd.replace(/\n/g, '')}"`, (err, stdout, stderr) => {
+        if (err) {
+            console.error('Setup Runtime Error:', stderr);
+            setupStatus = { isRunning: false, error: 'Falha no download ou extração.' };
+        } else {
+            console.log('Setup Runtime Success');
+            setupStatus = { isRunning: false, percent: 100, status: 'Concluído!', success: true };
+        }
+    });
+});
+
+app.get('/api/system/setup-status', checkAuth, (req, res) => {
+    res.json(setupStatus);
 });
 
 app.post('/api/auth/logout', (req, res) => {
