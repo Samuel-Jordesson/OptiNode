@@ -9,6 +9,35 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const archiver = require('archiver');
+const os = require('os');
+
+const APPS_FILE = path.join(__dirname, 'apps.json');
+let installingApps = {};
+
+// Helper: Get local IP
+function getLocalIP() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) return net.address;
+    }
+  }
+  return 'localhost';
+}
+
+// Helper: Read/Write Apps
+async function getApps() {
+  try {
+    if (!fs.existsSync(APPS_FILE)) await fsPromises.writeFile(APPS_FILE, JSON.stringify([]));
+    return JSON.parse(await fsPromises.readFile(APPS_FILE, 'utf8'));
+  } catch (e) { return []; }
+}
+async function saveApp(app) {
+  const apps = await getApps();
+  apps.push(app);
+  await fsPromises.writeFile(APPS_FILE, JSON.stringify(apps, null, 2));
+}
+
 const session = require('express-session');
 const multer = require('multer');
 const unzipper = require('unzipper');
@@ -435,11 +464,25 @@ app.post('/api/mysql/create', checkAuth, async (req, res) => {
 
     const connection = await mysql.createConnection({ host: '127.0.0.1', port: status.port, user: 'root' });
     
-    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
-    await connection.query(`CREATE USER IF NOT EXISTS '${username}'@'%' IDENTIFIED BY '${password}'`);
-    await connection.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${username}'@'%'`);
-    await connection.query(`FLUSH PRIVILEGES`);
+    // 1. Remove anonymous users to avoid connection hijacking on localhost
+    try {
+        await connection.query(`DELETE FROM mysql.user WHERE User = ''`);
+        await connection.query(`FLUSH PRIVILEGES`);
+    } catch (e) { console.log("Note: Anonymous users cleanup skipped or failed."); }
 
+    // 2. Create/Update database
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    
+    // 3. Handle User Access for all hosts
+    const hosts = ['%', 'localhost', '127.0.0.1'];
+    for (const h of hosts) {
+        // Use a more robust way to create or update password
+        await connection.query(`CREATE USER IF NOT EXISTS '${username}'@'${h}' IDENTIFIED BY '${password || ''}'`);
+        await connection.query(`ALTER USER '${username}'@'${h}' IDENTIFIED BY '${password || ''}'`);
+        await connection.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${username}'@'${h}'`);
+    }
+    
+    await connection.query(`FLUSH PRIVILEGES`);
     await connection.end();
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -513,6 +556,163 @@ app.post('/api/apache/stop', checkAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// --- App Store Endpoints ---
+app.get('/api/apps/list', checkAuth, async (req, res) => {
+  const apps = await getApps();
+  res.json({ apps, installing: installingApps });
+});
+
+app.post('/api/apps/uninstall', checkAuth, async (req, res) => {
+  const { appName, dbName } = req.body;
+  if (!appName) return res.status(400).json({ error: 'Nome do app não informado' });
+
+  try {
+    // 1. Remove files
+    const appPath = path.join('C:\\xampp\\htdocs', appName);
+    if (fs.existsSync(appPath)) {
+        require('child_process').execSync(`rmdir /S /Q "${appPath}"`);
+    }
+
+    // 2. Remove Database
+    if (dbName) {
+        await fetch(`http://localhost:3000/api/mysql/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', cookie: req.headers.cookie },
+            body: JSON.stringify({ dbName })
+        });
+    }
+
+    // 3. Remove from apps.json
+    let apps = await getApps();
+    apps = apps.filter(a => a.name !== appName);
+    await fsPromises.writeFile(APPS_FILE, JSON.stringify(apps, null, 2));
+
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/apps/install/wordpress', checkAuth, async (req, res) => {
+  const { appName, dbName: customDbName, dbUser, dbPass } = req.body;
+  if (!appName) return res.status(400).json({ error: 'Dados incompletos' });
+  
+  const dbName = customDbName || appName.replace(/[^a-zA-Z0-9]/g, '_');
+
+  // Prevent duplicate installation ID
+  if (installingApps[appName]) return res.status(400).json({ error: 'Já existe uma instalação em andamento' });
+
+  const appPath = path.join('C:\\xampp\\htdocs', appName);
+  if (fs.existsSync(appPath)) return res.status(400).json({ error: 'Pasta já existe' });
+
+  installingApps[appName] = { percent: 0, status: 'Iniciando...' };
+  io.emit('install_status', installingApps);
+
+  // Background process
+  (async () => {
+    try {
+      const dbName = appName.replace(/[^a-zA-Z0-9]/g, '_');
+      
+      // 1. Create Database
+      updateStatus(appName, 10, 'Criando banco de dados...');
+      const dbRes = await fetch(`http://localhost:3000/api/mysql/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: req.headers.cookie },
+        body: JSON.stringify({ dbName, username: dbUser || 'root', password: dbPass || '' })
+      });
+
+      if (!dbRes.ok) {
+          const errData = await dbRes.json();
+          throw new Error('Falha ao criar banco: ' + (errData.error || 'Erro desconhecido'));
+      }
+
+      // 2. Download WordPress
+      updateStatus(appName, 20, 'Fazendo download de WordPress...');
+      const zipPath = path.join(__dirname, 'wp_temp.zip');
+      const file = fs.createWriteStream(zipPath);
+      
+      const https = require('https');
+      https.get('https://wordpress.org/latest.zip', (response) => {
+        const totalSize = parseInt(response.headers['content-length'], 10);
+        let downloaded = 0;
+
+        response.on('data', (chunk) => {
+          downloaded += chunk.length;
+          const p = 20 + Math.floor((downloaded / totalSize) * 40);
+          updateStatus(appName, p, `Baixando... ${Math.floor((downloaded / totalSize) * 100)}%`);
+        });
+
+        response.pipe(file);
+
+        file.on('finish', async () => {
+          file.close();
+          
+          // 3. Extract
+          updateStatus(appName, 70, 'Extraindo arquivos...');
+          const stream = fs.createReadStream(zipPath).pipe(unzipper.Extract({ path: 'C:\\xampp\\htdocs' }));
+          
+          stream.on('close', async () => {
+            // Rename 'wordpress' to appName
+            const wpPath = path.join('C:\\xampp\\htdocs', 'wordpress');
+            fs.renameSync(wpPath, appPath);
+            fs.unlinkSync(zipPath);
+
+            // 4. Configure wp-config.php
+            updateStatus(appName, 90, 'Configurando wp-config.php...');
+            const configSamplePath = path.join(appPath, 'wp-config-sample.php');
+            const configPath = path.join(appPath, 'wp-config.php');
+            let config = await fsPromises.readFile(configSamplePath, 'utf8');
+            
+            const serverIP = getLocalIP();
+            const siteUrl = `http://${serverIP}:3136/${appName}`;
+
+            // Robust replacement handling various quote/space styles in define()
+            config = config.replace(/DB_NAME',\s*['"].*?['"]/g, `DB_NAME', '${dbName}'`);
+            config = config.replace(/DB_USER',\s*['"].*?['"]/g, `DB_USER', '${dbUser || 'root'}'`);
+            config = config.replace(/DB_PASSWORD',\s*['"].*?['"]/g, `DB_PASSWORD', '${dbPass || ''}'`);
+            config = config.replace(/DB_HOST',\s*['"].*?['"]/g, `DB_HOST', '127.0.0.1:3165'`);
+            
+            // Handle cases where 'localhost' is used without define (unlikely but safe)
+            config = config.replace(/['"]localhost['"]/g, `'127.0.0.1:3165'`);
+            
+            // Add Home and SiteURL for IP access
+            config += `\ndefine('WP_HOME', '${siteUrl}');\ndefine('WP_SITEURL', '${siteUrl}');\n`;
+
+            await fsPromises.writeFile(configPath, config);
+
+            // 5. Save and Finish
+            await saveApp({ 
+                name: appName, 
+                type: 'WordPress', 
+                url: siteUrl, 
+                dbName, 
+                date: new Date().toISOString() 
+            });
+
+            delete installingApps[appName];
+            io.emit('install_status', installingApps);
+            console.log(`[APP] WordPress '${appName}' instalado com sucesso.`);
+          });
+        });
+      }).on('error', (err) => { throw err; });
+
+    } catch (e) {
+      console.error('Erro na instalação:', e);
+      installingApps[appName].status = 'Erro: ' + e.message;
+      io.emit('install_status', installingApps);
+      setTimeout(() => { delete installingApps[appName]; io.emit('install_status', installingApps); }, 5000);
+    }
+  })();
+
+  res.json({ success: true, message: 'Instalação iniciada em segundo plano' });
+});
+
+function updateStatus(id, percent, status) {
+    if (installingApps[id]) {
+        installingApps[id].percent = percent;
+        installingApps[id].status = status;
+        io.emit('install_status', installingApps);
+    }
+}
+
 async function autoStartServices() {
   console.log('[AUTO] Verificando serviços no boot...');
   const mysqlPaths = getMySQLPaths();
@@ -523,18 +723,22 @@ async function autoStartServices() {
     try {
       let content = await fsPromises.readFile(mysqlPaths.config, 'utf8');
       
-      // Update key_buffer to key_buffer_size to avoid warning
-      content = content.replace(/key_buffer\s*=/g, 'key_buffer_size =');
+      // Update key_buffer to key_buffer_size to avoid warning, but ONLY in [mysqld] section
+      if (content.includes('[mysqld]')) {
+          const parts = content.split('[mysqld]');
+          parts[1] = parts[1].replace(/key_buffer\s*=/g, 'key_buffer_size =');
+          content = parts.join('[mysqld]');
+      }
       
       if (!content.includes('port=3165')) {
-        console.log('[AUTO] Ajustando porta do MySQL para 3165...');
-        content = content.replace(/port\s*=\s*\d+/g, 'port=3165');
-        if (!content.includes('bind-address')) {
-            content = content.replace(/\[mysqld\]/g, '[mysqld]\nbind-address = 0.0.0.0');
-        } else {
-            content = content.replace(/^bind-address\s*=.+/gm, '#bind-address = 0.0.0.0');
-        }
-        await fsPromises.writeFile(mysqlPaths.config, content);
+          console.log('[AUTO] Ajustando porta do MySQL para 3165...');
+          content = content.replace(/port\s*=\s*\d+/g, 'port=3165');
+          if (!content.includes('bind-address')) {
+              content = content.replace(/\[mysqld\]/g, '[mysqld]\nbind-address = 0.0.0.0');
+          } else {
+              content = content.replace(/^bind-address\s*=.+/gm, '#bind-address = 0.0.0.0');
+          }
+          await fsPromises.writeFile(mysqlPaths.config, content);
       }
     } catch (e) { console.error('[AUTO] Erro ao configurar MySQL:', e.message); }
   }
@@ -542,19 +746,28 @@ async function autoStartServices() {
   // 2. Start MySQL if stopped (Force Kill existing first for Windows)
   try {
     if (process.platform === 'win32') {
-       console.log('[AUTO] Limpando instâncias de MySQL para evitar conflitos...');
-       require('child_process').execSync('taskkill /F /IM mysqld.exe /T /FI "STATUS eq RUNNING"');
+       console.log('[AUTO] Limpando instâncias e travas de MySQL...');
+       try { require('child_process').execSync('taskkill /F /IM mysqld.exe /T /FI "STATUS eq RUNNING"'); } catch(e) {}
+       
+       // Remove lock files
+       const dataDir = path.join(mysqlPaths.bin, '..', '..', 'data');
+       ['mysql.pid', 'aria_log_control'].forEach(f => {
+           const p = path.join(dataDir, f);
+           if (fs.existsSync(p)) fs.unlinkSync(p);
+       });
     }
     
     setTimeout(() => {
         console.log('[AUTO] Iniciando MySQL na porta 3165...');
         if (process.platform === 'win32') {
-          require('child_process').exec(`"${mysqlPaths.bin}" --defaults-file="${mysqlPaths.config}" --standalone`);
+          require('child_process').exec(`"${mysqlPaths.bin}" --defaults-file="${mysqlPaths.config}" --standalone`, (err) => {
+              if (err) console.error("[AUTO] Falha ao iniciar MySQL:", err.message);
+          });
         } else {
           require('child_process').exec('sudo systemctl start mysql');
         }
-    }, 1000);
-  } catch (e) {}
+    }, 1500); // Increased wait time
+  } catch (e) { console.error('[AUTO] Erro no boot do MySQL:', e.message); }
 
   // 3. Start Apache (for phpMyAdmin) - Kill existing first for Windows
   try {
@@ -595,6 +808,9 @@ async function autoStartServices() {
 io.on('connection', async (socket) => {
   console.log('Client connected');
   
+  // Send current installing apps state on connect
+  socket.emit('install_status', installingApps);
+
   // Terminal Spawn with real PTY
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-color',

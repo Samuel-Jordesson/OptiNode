@@ -27,6 +27,24 @@
             --text-dim: #64748b;
         }
 
+        /* Progress UI */
+        .progress-container { width: 100%; background: #e2e8f0; border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+        .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; padding: 1.5rem 0; }
+        .app-card { background: #fff; border: 1px solid var(--border); border-radius: 1rem; padding: 2rem 1.5rem; text-align: center; position: relative; transition: all 0.2s; cursor: default; }
+        .app-card:hover { border-color: var(--accent); }
+        .app-card .uninstall-btn { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); opacity: 0; transition: 0.3s; background: var(--danger); color: #fff; border: none; padding: 0.4rem 1rem; border-radius: 0.5rem; font-size: 0.8rem; }
+        .app-card:hover .uninstall-btn { opacity: 1; bottom: 1.5rem; }
+        .app-icon { width: 64px; height: 64px; margin-bottom: 1rem; }
+
+        /* Sidebar Sub-menus */
+        .sub-nav { padding-left: 2.75rem; margin-top: 0.5rem; margin-bottom: 0.75rem; display: none; }
+        .sub-nav.active { display: block; }
+        .nav-sub-item { padding: 0.5rem 1rem; font-size: 0.825rem; color: #94a3b8; cursor: pointer; border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s; margin-bottom: 0.25rem; }
+        .nav-sub-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .nav-sub-item.active { color: #fff; font-weight: 600; background: rgba(255,255,255,0.03); }
+        .nav-sub-item svg { width: 14px; height: 14px; opacity: 0.6; }
+
         /* Switch Component */
         .switch {
             position: relative;
@@ -331,6 +349,16 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                 Aplicativos
             </div>
+            <div id="sub-nav-apps" class="sub-nav">
+                <div id="nav-apps-installed" class="nav-sub-item" onclick="switchView('apps', 'installed')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Meus Aplicativos
+                </div>
+                <div id="nav-apps-store" class="nav-sub-item" onclick="switchView('apps', 'store')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+                    Loja de Aplicativos
+                </div>
+            </div>
             <div id="nav-processes" class="nav-item" onclick="switchView('processes')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                 Processos
@@ -489,44 +517,96 @@
                     </tbody>
                 </table>
             </div>
+        </div>
 
-            <!-- Create DB Modal -->
-            <div id="create-db-modal" class="modal-overlay">
-                <div class="modal-content" style="max-width: 500px; height: auto;">
-                    <div class="modal-header">
-                        <h3>Criar Novo Banco de Dados</h3>
-                        <button onclick="document.getElementById('create-db-modal').classList.remove('active')">×</button>
+        <div id="apps-view" class="view-section">
+            <div id="app-tab-installed" class="app-sub-view active">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h2 style="font-weight: 700; font-size: 1.5rem;">Meus Aplicativos</h2>
+                    <button class="btn-action" onclick="switchView('apps', 'store')" style="background: var(--accent); color: #fff; border: none; padding: 0.6rem 1.25rem;">
+                        + Instalar Novo App
+                    </button>
+                </div>
+                <div id="apps-grid" class="app-grid">
+                    <!-- Apps appearing here -->
+                </div>
+            </div>
+
+            <div id="app-tab-store" class="app-sub-view" style="display: none;">
+                <h2 style="font-weight: 700; font-size: 1.5rem; margin-bottom: 2rem;">Explorar Loja de Aplicativos</h2>
+                <div class="app-grid">
+                    <div class="app-card" onclick="openInstallForm('wordpress')">
+                        <img src="https://s.w.org/style/images/about/WordPress-logotype-wmark.png" class="app-icon" style="object-fit: contain;">
+                        <h4 style="margin-bottom: 0.5rem;">WordPress</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-dim);">CMS ideal para sites e blogs.</p>
+                        <button class="btn-action" style="margin-top: 1.5rem; width: 100%; justify-content: center; background: var(--accent); color: #fff; border: none;">
+                            Instalar Agora
+                        </button>
                     </div>
-                    <div style="padding: 2rem;">
-                        <div class="info-list">
-                            <div>
-                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Nome do Banco</label>
-                                <input type="text" id="new-db-name" class="login-input" placeholder="ex: meu_site_db">
-                            </div>
-                            <div>
-                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Usuário</label>
-                                <input type="text" id="new-db-user" class="login-input" placeholder="ex: admin_user">
-                            </div>
-                            <div>
-                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Senha</label>
-                                <input type="password" id="new-db-pass" class="login-input" placeholder="••••••••">
-                            </div>
-                            <p style="font-size: 0.75rem; color: var(--text-dim); background: #f1f5f9; padding: 1rem; border-radius: 0.5rem;">
-                                ℹ️ O usuário terá permissão total no banco e acesso remoto (%) liberado automaticamente.
-                            </p>
-                            <button class="btn-login" onclick="createDatabase()" style="margin-top: 1rem;">Criar Banco e Usuário</button>
-                        </div>
+                    <div class="app-card" style="opacity: 0.5; cursor: not-allowed; border-style: dashed;">
+                        <div class="app-icon" style="background: #f1f5f9; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">?</div>
+                        <h4>Em breve...</h4>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="apps-view" class="view-section">
-            <div class="empty-state">
-                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                <h3>Gerenciador de Aplicativos</h3>
-                <p>Acompanhe o status dos seus sites e aplicações hospedadas no servidor. Você poderá ver logs em tempo real e controlar o ciclo de vida dos processos.</p>
-                <button class="btn-login" style="width: auto; padding: 0.75rem 2rem;">Instalar Aplicativo</button>
+        <!-- Install Form Modal -->
+        <div id="wp-install-modal" class="modal-overlay">
+            <div class="modal-content" style="max-width: 450px; height: auto;">
+                <div class="modal-header">
+                    <h3>Instalar WordPress</h3>
+                    <button onclick="document.getElementById('wp-install-modal').classList.remove('active')">×</button>
+                </div>
+                <div style="padding: 2rem;">
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Nome do Site (Pasta)</label>
+                        <input type="text" id="wp-app-name" class="login-input" placeholder="ex: meu-blog" oninput="document.getElementById('wp-db-name').value = this.value.replace(/[^a-zA-Z0-9]/g, '_')">
+                    </div>
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Nome do Banco de Dados</label>
+                        <input type="text" id="wp-db-name" class="login-input" placeholder="ex: meu_blog_db">
+                    </div>
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Usuário do Banco</label>
+                        <input type="text" id="wp-db-user" class="login-input" value="root" style="margin-bottom: 0;">
+                    </div>
+                    <div style="margin-bottom: 2rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">Senha do Banco</label>
+                        <input type="password" id="wp-db-pass" class="login-input" placeholder="Vazio no XAMPP" style="margin-bottom: 0;">
+                    </div>
+                    <button onclick="startWPInstall()" class="btn-action" style="width: 100%; justify-content: center; background: var(--success); color: #fff; border: none; padding: 0.875rem;">
+                        Iniciar Instalação 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="create-db-modal" class="modal-overlay">
+            <div class="modal-content" style="max-width: 500px; height: auto;">
+                <div class="modal-header">
+                    <h3>Criar Novo Banco de Dados</h3>
+                    <button onclick="document.getElementById('create-db-modal').classList.remove('active')">×</button>
+                </div>
+                <div style="padding: 2rem;">
+                    <div class="info-list">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Nome do Banco</label>
+                            <input type="text" id="new-db-name" class="login-input" placeholder="ex: meu_site_db">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Usuário</label>
+                            <input type="text" id="new-db-user" class="login-input" placeholder="ex: admin_user">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Senha</label>
+                            <input type="password" id="new-db-pass" class="login-input" placeholder="••••••••">
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-dim); background: #f1f5f9; padding: 1rem; border-radius: 0.5rem;">
+                            ℹ️ O usuário terá permissão total no banco e acesso remoto (%) liberado automaticamente.
+                        </p>
+                        <button class="btn-login" onclick="createDatabase()" style="margin-top: 1rem;">Criar Banco e Usuário</button>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -688,6 +768,104 @@
             } catch (e) { console.error("Erro ao carregar status MySQL/Apache:", e); }
         }
 
+        // --- App Store Logic ---
+        let currentApps = [];
+        let installingState = {};
+
+        async function loadApps() {
+            try {
+                const r = await fetch('/api/apps/list');
+                const d = await r.json();
+                currentApps = d.apps;
+                installingState = d.installing;
+                renderApps();
+            } catch (e) { console.error("Erro ao carregar apps:", e); }
+        }
+
+        function renderApps() {
+            const grid = document.getElementById('apps-grid');
+            let html = '';
+
+            // 1. Render Installing Apps
+            for (const [id, info] of Object.entries(installingState)) {
+                html += `
+                    <div class="app-card" style="cursor: wait; border-style: dashed;">
+                        <img src="https://s.w.org/style/images/about/WordPress-logotype-wmark.png" class="app-icon" style="filter: grayscale(1); opacity: 0.5;">
+                        <h4 style="color: var(--text-dim);">${id}</h4>
+                        <div style="font-size: 0.75rem; margin-top: 0.5rem; color: var(--accent); font-weight: 600;">${info.status}</div>
+                        <div class="progress-container">
+                            <div class="progress-bar" style="width: ${info.percent}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 2. Render Installed Apps
+            currentApps.forEach(app => {
+                html += `
+                    <div class="app-card" onclick="window.open('${app.url}')">
+                        <img src="https://s.w.org/style/images/about/WordPress-logotype-wmark.png" class="app-icon">
+                        <h4>${app.name}</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">${app.type}</p>
+                        <button class="uninstall-btn" onclick="event.stopPropagation(); uninstallApp('${app.name}', '${app.dbName}')">Desinstalar</button>
+                    </div>
+                `;
+            });
+
+            if (html === '' && Object.keys(installingState).length === 0) {
+                html = '<div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-dim);">Nenhum aplicativo instalado ainda.</div>';
+            }
+
+            grid.innerHTML = html;
+        }
+
+        function openInstallForm(type) {
+            if (type === 'wordpress') {
+                document.getElementById('wp-install-modal').classList.add('active');
+            }
+        }
+
+        async function startWPInstall() {
+            const appName = document.getElementById('wp-app-name').value;
+            const dbName = document.getElementById('wp-db-name').value;
+            const dbUser = document.getElementById('wp-db-user').value;
+            const dbPass = document.getElementById('wp-db-pass').value;
+
+            if (!appName || !dbName) return alert("Preencha o nome do site e do banco!");
+
+            const r = await fetch('/api/apps/install/wordpress', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ appName, dbName, dbUser, dbPass })
+            });
+
+            if (r.ok) {
+                document.getElementById('wp-install-modal').classList.remove('active');
+                switchView('apps', 'installed');
+                setTimeout(() => { loadApps(); loadDatabases(); }, 1000); 
+            } else {
+                const d = await r.json();
+                alert("Erro: " + d.error);
+            }
+        }
+
+        async function uninstallApp(appName, dbName) {
+            if (!confirm(`Tem certeza que deseja desinstalar "${appName}"? Isso apagará a pasta e o banco de dados!`)) return;
+
+            try {
+                const r = await fetch('/api/apps/uninstall', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appName, dbName })
+                });
+                if (r.ok) {
+                    loadApps();
+                } else {
+                    alert("Erro ao desinstalar");
+                }
+            } catch (e) { alert("Erro de conexão"); }
+        }
+
         async function toggleService(service, start) {
             const endpoint = `/api/${service}/${start ? 'start' : 'stop'}`;
             try {
@@ -812,20 +990,38 @@
             }
         }
 
-        function switchView(v) {
+        function switchView(v, sub = null) {
             // Update UI Sections
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
             document.getElementById(v + '-view').classList.add('active');
 
             // Update Sidebar Highlighting
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.sub-nav').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-sub-item').forEach(s => s.classList.remove('active'));
+
             const activeNav = document.getElementById('nav-' + v);
             const titleEl = document.getElementById('view-title');
             
             if (activeNav) {
                 activeNav.classList.add('active');
-                // Sync Title and Icon
                 titleEl.innerHTML = activeNav.innerHTML;
+                
+                // Show Sub-nav if exists
+                const subNav = document.getElementById('sub-nav-' + v);
+                if (subNav) subNav.classList.add('active');
+            }
+
+            // Handle Sub-tabs
+            if (v === 'apps') {
+                const tab = sub || 'installed';
+                document.querySelectorAll('.app-sub-view').forEach(view => view.style.display = 'none');
+                document.getElementById('app-tab-' + tab).style.display = 'block';
+                
+                const activeSub = document.getElementById('nav-apps-' + tab);
+                if (activeSub) activeSub.classList.add('active');
+                
+                loadApps();
             }
 
             // View specific logic
@@ -862,6 +1058,7 @@
             if (v === 'files') loadFiles();
             if (v === 'processes') { loadProcesses(); clearInterval(procInt); procInt = setInterval(loadProcesses, 5000); }
             if (v === 'database') loadMySQLStatus();
+            if (v === 'apps') loadApps();
         }
 
         async function loadFiles(p = '') {
@@ -1120,6 +1317,13 @@
 
         document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
         window.onload = checkAuth;
+        // Global Socket Listeners
+        socket.on('install_status', (state) => {
+            installingState = state;
+            if (document.getElementById('apps-view').classList.contains('active')) {
+                renderApps();
+            }
+        });
     </script>
 </body>
 </html>
