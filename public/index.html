@@ -42,7 +42,7 @@
         .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
 
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.75rem; margin-bottom: 1.75rem; }
-        .card { background: #fff; border: 1px solid var(--border); padding: 1.75rem; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card { background: #fff; border: 1px solid var(--border); padding: 1.75rem; border-radius: 0.75rem; }
         .card-title { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--text-dim); margin-bottom: 1.25rem; }
         .card-title span { margin-left: auto; color: var(--text-main); font-size: 1.1rem; }
         
@@ -56,7 +56,7 @@
         .view-section.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        #terminal-view { height: calc(100vh - 220px); background: #0a0a0a; border-radius: 0.75rem; padding: 1.25rem; border: 1px solid #334155; overflow: hidden; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); }
+        #terminal-view { height: calc(100vh - 220px); background: #0a0a0a; border-radius: 0.75rem; padding: 1.25rem; border: 1px solid #334155; overflow: hidden; }
         #terminal-container { height: 100%; width: 100%; }
 
         .breadcrumb { background: #fff; padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
@@ -72,15 +72,131 @@
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; }
         .modal-overlay.active { display: flex; }
-        .modal-content { background: #fff; width: 85%; height: 85vh; border-radius: 1rem; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .modal-content { background: #fff; width: 85%; height: 85vh; border-radius: 1rem; display: flex; flex-direction: column; overflow: hidden; }
         .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff; }
         .modal-header h3 { font-size: 1.1rem; font-weight: 600; color: var(--text-main); }
         .modal-header button { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-dim); }
-        .modal-body { flex: 1; padding: 1.5rem; overflow: auto; background: #f8fafc; color: #1e293b; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.5; white-space: pre-wrap; font-size: 0.9rem; border-top: 1px solid var(--border); }
+        .modal-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         
         .context-menu { position: fixed; background: #fff; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 0.5rem; width: 170px; z-index: 3000; display: none; padding: 0.5rem 0; }
         .menu-item { padding: 0.625rem 1rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; }
         .menu-item:hover { background: #f1f5f9; }
+        
+        /* Grid View Styles */
+        .file-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); 
+            gap: 1.5rem; 
+            padding: 1.5rem; 
+        }
+        .file-card { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            text-align: center; 
+            padding: 1.25rem; 
+            border-radius: 1rem; 
+            border: 1px solid transparent; 
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+            cursor: pointer;
+            position: relative;
+        }
+        .file-card:hover { 
+            background: #f1f5f9; 
+            border-color: var(--border); 
+        }
+        .file-card svg { 
+            width: 54px; 
+            height: 54px; 
+            margin-bottom: 1rem; 
+        }
+        .file-card span { 
+            font-size: 0.85rem; 
+            font-weight: 500; 
+            word-break: break-all; 
+            display: -webkit-box; 
+            -webkit-line-clamp: 2; 
+            line-clamp: 2;
+            -webkit-box-orient: vertical; 
+            overflow: hidden;
+            line-height: 1.4;
+            color: var(--text-main);
+        }
+        .file-card .size-badge {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+
+        .file-thumbnail {
+            width: 54px;
+            height: 54px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+        
+        .list-thumbnail {
+            width: 22px;
+            height: 22px;
+            object-fit: cover;
+            border-radius: 3px;
+            border: 1px solid var(--border);
+        }
+
+        /* Editor Styles */
+        .editor-textarea {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            background: #fff;
+            color: #1e293b;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            padding: 0.75rem 1rem;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-left: auto;
+            margin-right: 1rem;
+        }
+        .btn-icon {
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: var(--text-dim);
+        }
+        .btn-icon:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
+            transform: translateY(-1px);
+        }
+        .btn-icon.success:hover {
+            background: #dcfce7;
+            color: var(--success);
+            border-color: var(--success);
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+            margin: auto;
+        }
         
         /* Login Overlay */
         #login-overlay { 
@@ -90,7 +206,6 @@
         .login-card { 
             width: 100%; max-width: 400px; padding: 3.5rem; background: #fff;
             border: 1px solid var(--border); border-radius: 1.5rem; 
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
             text-align: center;
         }
         .login-card h2 { margin-bottom: 2rem; font-weight: 700; color: var(--sidebar); font-size: 1.75rem; }
@@ -103,7 +218,7 @@
         .btn-login { 
             width: 100%; padding: 1rem; background: var(--accent); color: #fff; 
             border: none; border-radius: 0.75rem; font-weight: 600; cursor: pointer; 
-            font-size: 1rem; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+            font-size: 1rem; transition: all 0.2s;
         }
         .btn-login:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
 
@@ -213,14 +328,25 @@
         <section id="files-view" class="view-section">
             <div id="breadcrumb-list" class="breadcrumb"></div>
             <div class="action-bar">
-                <button class="btn-action" onclick="initCreateFolder()">Nova Pasta</button>
-                <button class="btn-action" onclick="initCreateFile()">Novo Arquivo</button>
+                <button class="btn-action" onclick="initCreateFolder()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                    Nova Pasta
+                </button>
+                <button class="btn-action" onclick="initCreateFile()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                    Novo Arquivo
+                </button>
+                <div style="margin-left: auto; display: flex; gap: 0.5rem; background: #fff; padding: 0.25rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+                    <button class="btn-action" onclick="setFileView('grid')" id="view-grid-btn" style="border: none; padding: 0.4rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </button>
+                    <button class="btn-action" onclick="setFileView('list')" id="view-list-btn" style="border: none; padding: 0.4rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    </button>
+                </div>
             </div>
-            <div class="file-list-card">
-                <table class="file-table">
-                    <thead><tr><th>Nome</th><th>Tamanho</th><th>Modificado</th></tr></thead>
-                    <tbody id="file-table-body"></tbody>
-                </table>
+            <div class="file-list-card" id="file-container">
+                <div id="file-grid-body" class="file-grid"></div>
             </div>
         </section>
 
@@ -244,8 +370,22 @@
 
     <div id="file-viewer-modal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-header"><h3 id="modal-filename">Arquivo</h3><button onclick="closeModal()">×</button></div>
-            <div id="modal-body" class="modal-body"></div>
+            <div class="modal-header">
+                <h3 id="modal-filename">Arquivo</h3>
+                <div class="modal-actions">
+                    <button class="btn-icon" onclick="copyFileContent()" title="Copiar Tudo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                    </button>
+                    <button class="btn-icon success" onclick="saveFileContent()" title="Salvar Alterações">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    </button>
+                </div>
+                <button onclick="closeModal()" style="font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-dim);">×</button>
+            </div>
+            <div id="modal-body" class="modal-body" style="padding: 0; overflow: auto; display: flex; align-items: center; justify-content: center; background: #f1f5f9;">
+                <textarea id="file-editor-area" class="editor-textarea" spellcheck="false"></textarea>
+                <img id="file-image-preview" class="image-preview" style="display: none;">
+            </div>
         </div>
     </div>
 
@@ -261,7 +401,7 @@
 
     <script>
         let cpuChart, ramChart, term, procInt;
-        let currentPath = '', selectedItemPath = '';
+        let currentPath = '', selectedItemPath = '', fileViewMode = 'grid';
         const socket = io();
 
         async function initCharts() {
@@ -406,33 +546,138 @@
                 ${i < parts.length - 1 ? '<span>/</span>' : ''}
             `).join('');
 
-            const folderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #f59e0b; margin-right: 0.5rem;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path></svg>`;
-            const fileIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #64748b; margin-right: 0.5rem;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+            const folderIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: #f59e0b;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path></svg>`;
+            const fileIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: #64748b;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+            
+            const imageExts = ['png','jpg','jpeg','gif','svg','webp'];
+            const container = document.getElementById('file-grid-body');
+            
+            if (fileViewMode === 'grid') {
+                container.className = 'file-grid';
+                container.innerHTML = d.files.map(f => {
+                    const cleanPath = f.path.replace(/\\/g, '/');
+                    const ext = f.name.split('.').pop().toLowerCase();
+                    const isImg = imageExts.includes(ext);
+                    
+                    const iconHtml = isImg 
+                        ? `<img src="/api/download?path=${encodeURIComponent(cleanPath)}" class="file-thumbnail" loading="lazy">` 
+                        : (f.isDirectory ? folderIcon : fileIcon);
 
-            document.getElementById('file-table-body').innerHTML = d.files.map(f => {
-                const cleanPath = f.path.replace(/\\/g, '/');
-                return `
-                    <tr class="file-row" 
-                        oncontextmenu="showMenu(event, '${cleanPath}')"
-                        onclick="${f.isDirectory ? `loadFiles('${cleanPath}')` : `viewFile('${cleanPath}')`}">
-                        <td style="display: flex; align-items: center;">
-                            ${f.isDirectory ? folderIcon : fileIcon}
+                    return `
+                        <div class="file-card" 
+                            oncontextmenu="showMenu(event, '${cleanPath}')"
+                            onclick="${f.isDirectory ? `loadFiles('${cleanPath}')` : `viewFile('${cleanPath}')`}">
+                            ${iconHtml}
                             <span>${f.name}</span>
-                        </td>
-                        <td>${f.size}</td>
-                        <td>${new Date(f.birthtime).toLocaleDateString()}</td>
-                    </tr>
+                            <div class="size-badge">${f.isDirectory ? 'Pasta' : f.size}</div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.className = '';
+                container.innerHTML = `
+                    <table class="file-table">
+                        <thead><tr><th>Nome</th><th>Tamanho</th><th>Modificado</th></tr></thead>
+                        <tbody>
+                            ${d.files.map(f => {
+                                const cleanPath = f.path.replace(/\\/g, '/');
+                                const ext = f.name.split('.').pop().toLowerCase();
+                                const isImg = imageExts.includes(ext);
+                                
+                                const iconHtml = isImg 
+                                    ? `<img src="/api/download?path=${encodeURIComponent(cleanPath)}" class="list-thumbnail" loading="lazy">` 
+                                    : (f.isDirectory ? folderIcon : fileIcon);
+
+                                return `
+                                    <tr class="file-row" 
+                                        oncontextmenu="showMenu(event, '${cleanPath}')"
+                                        onclick="${f.isDirectory ? `loadFiles('${cleanPath}')` : `viewFile('${cleanPath}')`}">
+                                        <td style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <div style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">${iconHtml}</div>
+                                            <span>${f.name}</span>
+                                        </td>
+                                        <td>${f.isDirectory ? '--' : f.size}</td>
+                                        <td>${new Date(f.birthtime).toLocaleDateString()}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
                 `;
-            }).join('');
+            }
+            
+            // Update View Buttons UI
+            document.getElementById('view-grid-btn').style.color = fileViewMode === 'grid' ? 'var(--accent)' : 'var(--text-dim)';
+            document.getElementById('view-grid-btn').style.background = fileViewMode === 'grid' ? '#eff6ff' : 'transparent';
+            document.getElementById('view-list-btn').style.color = fileViewMode === 'list' ? 'var(--accent)' : 'var(--text-dim)';
+            document.getElementById('view-list-btn').style.background = fileViewMode === 'list' ? '#eff6ff' : 'transparent';
+        }
+
+        function setFileView(mode) {
+            fileViewMode = mode;
+            loadFiles(currentPath);
         }
 
         async function viewFile(p) {
-            const r = await fetch(`/api/file-content?path=${encodeURIComponent(p)}`);
-            const d = await r.json();
-            if (d.error) return alert(d.error);
+            const ext = p.split('.').pop().toLowerCase();
+            const isImg = ['png','jpg','jpeg','gif','svg','webp'].includes(ext);
+            
+            selectedItemPath = p;
             document.getElementById('modal-filename').innerText = p.split('/').pop();
-            document.getElementById('modal-body').innerText = d.content;
-            document.getElementById('file-viewer-modal').classList.add('active');
+            
+            const area = document.getElementById('file-editor-area');
+            const img = document.getElementById('file-image-preview');
+            const actions = document.querySelector('.modal-actions');
+
+            if (isImg) {
+                area.style.display = 'none';
+                img.style.display = 'block';
+                img.src = `/api/download?path=${encodeURIComponent(p)}`;
+                actions.style.opacity = '0';
+                actions.style.pointerEvents = 'none';
+                document.getElementById('file-viewer-modal').classList.add('active');
+            } else {
+                img.style.display = 'none';
+                area.style.display = 'block';
+                actions.style.opacity = '1';
+                actions.style.pointerEvents = 'auto';
+                
+                const r = await fetch(`/api/file-content?path=${encodeURIComponent(p)}`);
+                const d = await r.json();
+                if (d.error) return alert(d.error);
+                area.value = d.content;
+                document.getElementById('file-viewer-modal').classList.add('active');
+            }
+        }
+
+        async function saveFileContent() {
+            const content = document.getElementById('file-editor-area').value;
+            const btn = document.querySelector('.btn-icon.success');
+            btn.style.opacity = '0.5';
+            btn.disabled = true;
+
+            const r = await fetch('/api/save-file', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path: selectedItemPath, content})
+            });
+            const d = await r.json();
+            
+            btn.style.opacity = '1';
+            btn.disabled = false;
+
+            if (d.success) {
+                alert('Arquivo salvo com sucesso!');
+            } else {
+                alert('Erro ao salvar: ' + d.error);
+            }
+        }
+
+        function copyFileContent() {
+            const content = document.getElementById('file-editor-area').value;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Conteúdo copiado para a área de transferência!');
+            });
         }
 
         function closeModal() {

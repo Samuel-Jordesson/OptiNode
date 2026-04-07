@@ -169,6 +169,14 @@ app.get('/api/file-content', checkAuth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+app.post('/api/save-file', checkAuth, async (req, res) => {
+  try {
+    const { path, content } = req.body;
+    await fsPromises.writeFile(path, content, 'utf8');
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 app.post('/api/rename', checkAuth, async (req, res) => {
   try {
     const { oldPath, newName } = req.body;
