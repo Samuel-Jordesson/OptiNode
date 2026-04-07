@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const si = require('systeminformation');
 const cors = require('cors');
 const { spawn } = require('child_process');
+const pty = require('node-pty');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
@@ -284,23 +285,28 @@ app.post('/api/system/shutdown', checkAuth, (req, res) => {
 io.on('connection', async (socket) => {
   console.log('Client connected');
   
-  // Terminal Spawn
-  const ptyProcess = spawn(shell, shellArgs, {
+  // Terminal Spawn with real PTY
+  const ptyProcess = pty.spawn(shell, [], {
+    name: 'xterm-color',
+    cols: 80,
+    rows: 24,
     cwd: process.cwd(),
-    env: { ...process.env, LANG: 'en_US.UTF-8' }
+    env: process.env
   });
 
-  ptyProcess.stdout.on('data', (data) => {
-    socket.emit('terminal-output', data.toString('utf8'));
-  });
-
-  ptyProcess.stderr.on('data', (data) => {
-    socket.emit('terminal-output', data.toString('utf8'));
+  ptyProcess.on('data', (data) => {
+    socket.emit('terminal-output', data);
   });
 
   socket.on('terminal-input', (data) => {
     if (ptyProcess) {
-      ptyProcess.stdin.write(data);
+      ptyProcess.write(data);
+    }
+  });
+
+  socket.on('terminal-resize', (size) => {
+    if (ptyProcess) {
+      ptyProcess.resize(size.cols, size.rows);
     }
   });
 

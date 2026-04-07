@@ -511,23 +511,29 @@
                     term = new Terminal({ 
                         theme: { background: '#0a0a0a', cursor: '#2563eb' },
                         fontSize: 14,
-                        fontFamily: 'Consolas, "Courier New", monospace'
+                        fontFamily: 'Consolas, "Courier New", monospace',
+                        allowProposedApi: true
                     }); 
                     const fitAddon = new FitAddon.FitAddon();
                     term.loadAddon(fitAddon);
                     term.open(document.getElementById('terminal-container')); 
-                    fitAddon.fit();
                     
+                    const sendResize = () => {
+                        fitAddon.fit();
+                        socket.emit('terminal-resize', { cols: term.cols, rows: term.rows });
+                    };
+
                     term.onData(d => socket.emit('terminal-input', d)); 
                     socket.on('terminal-output', d => term.write(d)); 
-                    window.addEventListener('resize', () => fitAddon.fit());
+                    window.addEventListener('resize', sendResize);
+                    setTimeout(sendResize, 200);
                 } else {
-                    // Refit on switch
                     setTimeout(() => {
                         const fitAddon = new FitAddon.FitAddon();
                         term.loadAddon(fitAddon);
                         fitAddon.fit();
-                    }, 100);
+                        socket.emit('terminal-resize', { cols: term.cols, rows: term.rows });
+                    }, 200);
                 }
             }
             if (v === 'files') loadFiles();
