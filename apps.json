@@ -5,5 +5,12 @@
     "url": "http://192.168.18.33:3136/meu-site-samuel",
     "dbName": "meu_site_samuel",
     "date": "2026-04-07T16:55:40.747Z"
+  },
+  {
+    "name": "n8n Automation",
+    "type": "Workflow",
+    "url": "http://192.168.18.33:5678",
+    "dbName": "SQLite (C:\\OptiNode\\data)",
+    "date": "2026-04-07T17:55:02.746Z"
   }
 ]

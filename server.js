@@ -13,6 +13,17 @@ const os = require('os');
 
 const APPS_FILE = path.join(__dirname, 'apps.json');
 let installingApps = {};
+let appProcesses = {}; // Store running child processes
+
+// Root Directories for modern apps (outside XAMPP)
+const OPTINODE_ROOT = 'C:\\OptiNode';
+const APPS_DIR = path.join(OPTINODE_ROOT, 'apps');
+const DATA_DIR = path.join(OPTINODE_ROOT, 'data');
+
+// Ensure root structure exists
+if (!fs.existsSync(OPTINODE_ROOT)) fs.mkdirSync(OPTINODE_ROOT, { recursive: true });
+if (!fs.existsSync(APPS_DIR)) fs.mkdirSync(APPS_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // Helper: Get local IP
 function getLocalIP() {
@@ -206,6 +217,57 @@ app.post('/api/save-file', checkAuth, async (req, res) => {
     await fsPromises.writeFile(path, content, 'utf8');
     res.json({ success: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/files/share', checkAuth, async (req, res) => {
+  const { targetPath } = req.body;
+  if (!targetPath) return res.status(400).json({ error: 'Caminho inválido' });
+
+  const absolutePath = path.resolve(targetPath);
+  if (!fs.existsSync(absolutePath) || !fs.lstatSync(absolutePath).isDirectory()) {
+    return res.status(400).json({ error: 'Apenas pastas podem ser compartilhadas.' });
+  }
+
+  const shareName = path.basename(absolutePath).replace(/[^a-zA-Z0-9]/g, '_');
+  const localIP = getLocalIP();
+  const { exec } = require('child_process');
+
+  // Command to share folder on Windows: net share <name>="<path>" /grant:everyone,full
+  // We use CMD/C because net share is a shell command
+  const cmd = `net share "${shareName}"="${absolutePath}" /grant:everyone,full`;
+  
+  exec(cmd, (error, stdout, stderr) => {
+    if (error && !stdout.includes('already shared')) {
+      console.error('Erro ao compartilhar:', stderr);
+      return res.status(500).json({ error: 'Falha ao compartilhar pasta. Verifique permissões de administrador.' });
+    }
+    
+    res.json({ 
+      success: true, 
+      shareName, 
+      networkPath: `\\\\${localIP}\\${shareName}` 
+    });
+  });
+});
+
+app.post('/api/files/unshare', checkAuth, async (req, res) => {
+  const { targetPath } = req.body;
+  if (!targetPath) return res.status(400).json({ error: 'Caminho inválido' });
+
+  const absolutePath = path.resolve(targetPath);
+  const shareName = path.basename(absolutePath).replace(/[^a-zA-Z0-9]/g, '_');
+  const { exec } = require('child_process');
+
+  const cmd = `net share "${shareName}" /delete`;
+  
+  exec(cmd, (error, stdout, stderr) => {
+    // If it's already not shared, we count as success
+    if (error && !stderr.includes('cannot be found')) {
+      console.error('Erro ao remover compartilhamento:', stderr);
+      return res.status(500).json({ error: 'Falha ao remover compartilhamento.' });
+    }
+    res.json({ success: true });
+  });
 });
 
 app.post('/api/rename', checkAuth, async (req, res) => {
@@ -705,6 +767,144 @@ app.post('/api/apps/install/wordpress', checkAuth, async (req, res) => {
   res.json({ success: true, message: 'Instalação iniciada em segundo plano' });
 });
 
+app.post('/api/apps/install/n8n', checkAuth, async (req, res) => {
+  const appName = 'n8n';
+  const appPath = path.join(APPS_DIR, appName);
+  const n8nDataPath = path.join(DATA_DIR, appName);
+
+  if (fs.existsSync(appPath)) return res.status(400).json({ error: 'A pasta n8n já existe em C:\\OptiNode\\apps.' });
+
+  installingApps[appName] = { percent: 0, status: 'Iniciando instalação em C:\\OptiNode...' };
+  io.emit('install_status', installingApps);
+
+  (async () => {
+    try {
+      if (!fs.existsSync(appPath)) fs.mkdirSync(appPath, { recursive: true });
+      if (!fs.existsSync(n8nDataPath)) fs.mkdirSync(n8nDataPath, { recursive: true });
+
+      updateStatus(appName, 20, 'Configurando ambiente Node.js...');
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execPromise = util.promisify(exec);
+
+      await execPromise('npm init -y', { cwd: appPath });
+
+      updateStatus(appName, 40, 'Baixando n8n (pode demorar alguns minutos)...');
+      
+      // Use environment variable N8N_USER_FOLDER to store data in our data dir
+      const n8nEnv = { ...process.env, N8N_USER_FOLDER: n8nDataPath };
+      
+      exec('npm install n8n', { cwd: appPath, env: n8nEnv }, async (error) => {
+        if (error) {
+          console.error('Erro ao instalar n8n:', error);
+          if (installingApps[appName]) {
+             installingApps[appName].status = 'Erro na instalação via NPM';
+             io.emit('install_status', installingApps);
+             setTimeout(() => { delete installingApps[appName]; io.emit('install_status', installingApps); }, 5000);
+          }
+          return;
+        }
+
+        updateStatus(appName, 90, 'Finalizando configuração...');
+        const localIP = getLocalIP();
+        const siteUrl = `http://${localIP}:5678`;
+
+        await saveApp({
+          name: 'n8n Automation',
+          type: 'Workflow',
+          url: siteUrl,
+          dbName: 'SQLite (C:\\OptiNode\\data)',
+          date: new Date().toISOString()
+        });
+
+        console.log('[APP] n8n instalado com sucesso em C:\\OptiNode.');
+        delete installingApps[appName];
+        io.emit('install_status', installingApps);
+      });
+
+    } catch (e) {
+      console.error('Erro n8n:', e);
+      if (installingApps[appName]) {
+        installingApps[appName].status = 'Erro: ' + e.message;
+        io.emit('install_status', installingApps);
+        setTimeout(() => { delete installingApps[appName]; io.emit('install_status', installingApps); }, 5000);
+      }
+    }
+  })();
+
+  res.json({ success: true, message: 'Instalação iniciada em segundo plano' });
+});
+
+app.post('/api/apps/start', checkAuth, async (req, res) => {
+  const { name } = req.body;
+  const success = await startAppProcess(name);
+  if (success === 'Running') return res.json({ success: true, message: 'Já está rodando' });
+  if (success) return res.json({ success: true });
+  res.status(400).json({ error: 'Falha ao iniciar ou app não compatível.' });
+});
+
+async function startAppProcess(name) {
+  if (appProcesses[name]) return 'Running';
+
+  const apps = await getApps();
+  const app = apps.find(a => a.name === name);
+  if (!app) return false;
+
+  const { spawn } = require('child_process');
+  
+  if (name === 'n8n Automation') {
+    const appPath = path.join(APPS_DIR, 'n8n');
+    const n8nDataPath = path.join(DATA_DIR, 'n8n');
+    const localIP = getLocalIP();
+    const n8nEnv = { 
+      ...process.env, 
+      N8N_USER_FOLDER: n8nDataPath,
+      N8N_SECURE_COOKIE: 'false',
+      N8N_HOST: localIP,
+      WEBHOOK_URL: `http://${localIP}:5678/`
+    };
+    
+    console.log(`[AUTO] Dando partida em ${name}...`);
+    const child = spawn('npx', ['n8n'], { 
+      cwd: appPath, 
+      env: n8nEnv,
+      shell: true
+    });
+
+    appProcesses[name] = child;
+
+    child.stdout.on('data', (data) => {
+        // console.log(`[n8n] ${data}`); 
+    });
+    
+    child.on('exit', () => {
+      console.log(`[APP] ${name} encerrado.`);
+      delete appProcesses[name];
+    });
+
+    return true;
+  }
+  return false;
+}
+
+app.post('/api/apps/stop', checkAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!appProcesses[name]) return res.json({ success: true, message: 'Já está parado' });
+
+  const child = appProcesses[name];
+  child.kill(); 
+  delete appProcesses[name];
+  res.json({ success: true });
+});
+
+app.get('/api/apps/status', checkAuth, (req, res) => {
+  const status = {};
+  Object.keys(appProcesses).forEach(name => {
+    status[name] = true;
+  });
+  res.json(status);
+});
+
 function updateStatus(id, percent, status) {
     if (installingApps[id]) {
         installingApps[id].percent = percent;
@@ -715,6 +915,7 @@ function updateStatus(id, percent, status) {
 
 async function autoStartServices() {
   console.log('[AUTO] Verificando serviços no boot...');
+  const { exec, execSync } = require('child_process');
   const mysqlPaths = getMySQLPaths();
   const apachePaths = getApachePaths();
 
@@ -723,11 +924,15 @@ async function autoStartServices() {
     try {
       let content = await fsPromises.readFile(mysqlPaths.config, 'utf8');
       
-      // Update key_buffer to key_buffer_size to avoid warning, but ONLY in [mysqld] section
+      // Update key_buffer to key_buffer_size ONLY in [mysqld] section and stop before other sections
       if (content.includes('[mysqld]')) {
-          const parts = content.split('[mysqld]');
-          parts[1] = parts[1].replace(/key_buffer\s*=/g, 'key_buffer_size =');
-          content = parts.join('[mysqld]');
+          const sections = content.split(/^\[/gm);
+          for (let i = 0; i < sections.length; i++) {
+              if (sections[i].startsWith('mysqld]')) {
+                  sections[i] = sections[i].replace(/^key_buffer\s*=/gm, 'key_buffer_size =');
+              }
+          }
+          content = sections.join('[');
       }
       
       if (!content.includes('port=3165')) {
@@ -746,8 +951,9 @@ async function autoStartServices() {
   // 2. Start MySQL if stopped (Force Kill existing first for Windows)
   try {
     if (process.platform === 'win32') {
-       console.log('[AUTO] Limpando instâncias e travas de MySQL...');
-       try { require('child_process').execSync('taskkill /F /IM mysqld.exe /T /FI "STATUS eq RUNNING"'); } catch(e) {}
+       console.log('[AUTO] Limpando instâncias e travas de MySQL/n8n...');
+       try { execSync('taskkill /F /IM mysqld.exe /T /FI "STATUS eq RUNNING"'); } catch(e) {}
+       try { execSync('taskkill /F /FI "localport eq 5678" /T'); } catch(e) {} // Clean n8n port
        
        // Remove lock files
        const dataDir = path.join(mysqlPaths.bin, '..', '..', 'data');
@@ -803,6 +1009,18 @@ async function autoStartServices() {
        }
     }
   } catch (e) {}
+
+  // 5. Auto-start installed apps (n8n, etc)
+  try {
+    const appsList = await getApps();
+    for (const app of appsList) {
+      if (app.type === 'Workflow') {
+        await startAppProcess(app.name);
+      }
+    }
+  } catch (e) {
+    console.error('[AUTO] Erro ao auto-iniciar apps:', e.message);
+  }
 }
 
 io.on('connection', async (socket) => {
