@@ -16,11 +16,44 @@
             --bg: #f8fafc;
             --sidebar: #1e293b;
             --accent: #2563eb;
-            --text-main: #1e293b;
-            --text-dim: #64748b;
-            --border: #e2e8f0;
+            --accent-glow: rgba(37, 99, 235, 0.15);
             --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --border: #e2e8f0;
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #0f172a;
+            --text-dim: #64748b;
         }
+
+        /* Switch Component */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .4s;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+        }
+        input:checked + .slider { background-color: var(--success); }
+        input:checked + .slider:before { transform: translateX(14px); }
+        .slider.round { border-radius: 20px; }
+        .slider.round:before { border-radius: 50%; }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
@@ -222,12 +255,51 @@
         }
         .btn-login:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
 
-        .logout-item { 
-            margin-top: auto; color: #ef4444 !important; 
-            border-top: 1px solid rgba(255,255,255,0.05); 
-            padding-top: 1.5rem !important;
-        }
         .logout-item:hover { background: rgba(239, 68, 68, 0.1) !important; color: #f87171 !important; }
+
+        /* Empty State & UI Helpers */
+        .empty-state {
+            padding: 4rem 2rem;
+            text-align: center;
+            background: #fff;
+            border-radius: 1rem;
+            border: 1px dashed var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .empty-state svg { color: var(--text-dim); opacity: 0.5; }
+        .empty-state h3 { font-size: 1.25rem; font-weight: 600; color: var(--text-main); }
+        .empty-state p { color: var(--text-dim); max-width: 400px; line-height: 1.6; }
+        
+        .db-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        .db-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .db-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .db-card .db-icon {
+            width: 48px;
+            height: 48px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -248,8 +320,16 @@
                 Terminal
             </div>
             <div id="nav-files" class="nav-item" onclick="switchView('files')">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                 Arquivos
+            </div>
+            <div id="nav-database" class="nav-item" onclick="switchView('database')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                Banco de Dados
+            </div>
+            <div id="nav-apps" class="nav-item" onclick="switchView('apps')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                Aplicativos
             </div>
             <div id="nav-processes" class="nav-item" onclick="switchView('processes')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
@@ -350,14 +430,105 @@
             </div>
         </section>
 
-        <section id="processes-view" class="view-section">
+        <div id="processes-view" class="view-section">
             <div class="file-list-card">
                 <table class="file-table">
-                    <thead><tr><th>Processo</th><th>PID</th><th>CPU %</th><th>Memória %</th><th>Ação</th></tr></thead>
+                    <thead><tr><th>Nome</th><th>PID</th><th>CPU</th><th>MEM</th><th>Ação</th></tr></thead>
                     <tbody id="process-table-body"></tbody>
                 </table>
             </div>
-        </section>
+        </div>
+
+        <div id="database-view" class="view-section">
+            <div class="card" style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; padding: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 2rem;">
+                    <!-- MySQL Toggle -->
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">MySQL</span>
+                        <label class="switch">
+                            <input type="checkbox" id="mysql-toggle" onclick="toggleService('mysql', this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <div id="mysql-status-dot" class="status-dot" style="background: #ccc; margin-left: 0.25rem;"></div>
+                    </div>
+
+                    <!-- Apache Toggle -->
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">Apache (Web)</span>
+                        <label class="switch">
+                            <input type="checkbox" id="apache-toggle" onclick="toggleService('apache', this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <div id="apache-status-dot" class="status-dot" style="background: #ccc; margin-left: 0.25rem;"></div>
+                    </div>
+
+                    <div id="mysql-port-badge" class="status-badge" style="border-style: dashed; margin-left: 0.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                        <span id="mysql-port-text">Porta: ---</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.75rem;">
+                    <button class="btn-action" onclick="startMySQL()" id="btn-start-mysql" style="display: none; background: var(--success); color: #fff; border: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Iniciar MySQL
+                    </button>
+                    <button class="btn-action" onclick="applyMySQLConfig()" id="btn-fix-config" style="display: none; border-color: var(--accent); color: var(--accent);">
+                        Corrigir Configuração (Porta 3165)
+                    </button>
+                    <button class="btn-action" onclick="document.getElementById('create-db-modal').classList.add('active')" style="background: var(--accent); color: #fff; border: none;">
+                        + Novo Banco de Dados
+                    </button>
+                </div>
+            </div>
+
+            <div class="file-list-card">
+                <table class="file-table">
+                    <thead><tr><th>Banco de Dados</th><th>Usuário Principal</th><th>Acesso</th><th style="text-align: right; padding-right: 1.5rem;">Ações</th></tr></thead>
+                    <tbody id="db-table-body">
+                        <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-dim);">Carregando bancos de dados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Create DB Modal -->
+            <div id="create-db-modal" class="modal-overlay">
+                <div class="modal-content" style="max-width: 500px; height: auto;">
+                    <div class="modal-header">
+                        <h3>Criar Novo Banco de Dados</h3>
+                        <button onclick="document.getElementById('create-db-modal').classList.remove('active')">×</button>
+                    </div>
+                    <div style="padding: 2rem;">
+                        <div class="info-list">
+                            <div>
+                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Nome do Banco</label>
+                                <input type="text" id="new-db-name" class="login-input" placeholder="ex: meu_site_db">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Usuário</label>
+                                <input type="text" id="new-db-user" class="login-input" placeholder="ex: admin_user">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem;">Senha</label>
+                                <input type="password" id="new-db-pass" class="login-input" placeholder="••••••••">
+                            </div>
+                            <p style="font-size: 0.75rem; color: var(--text-dim); background: #f1f5f9; padding: 1rem; border-radius: 0.5rem;">
+                                ℹ️ O usuário terá permissão total no banco e acesso remoto (%) liberado automaticamente.
+                            </p>
+                            <button class="btn-login" onclick="createDatabase()" style="margin-top: 1rem;">Criar Banco e Usuário</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="apps-view" class="view-section">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <h3>Gerenciador de Aplicativos</h3>
+                <p>Acompanhe o status dos seus sites e aplicações hospedadas no servidor. Você poderá ver logs em tempo real e controlar o ciclo de vida dos processos.</p>
+                <button class="btn-login" style="width: auto; padding: 0.75rem 2rem;">Instalar Aplicativo</button>
+            </div>
+        </div>
     </main>
 
     <div id="context-menu" class="context-menu">
@@ -489,6 +660,158 @@
             }
         });
 
+        async function loadMySQLStatus() {
+            try {
+                const [r, rA] = await Promise.all([
+                    fetch('/api/mysql/status'),
+                    fetch('/api/apache/status')
+                ]);
+                const [d, dA] = await Promise.all([r.json(), rA.json()]);
+
+                const mysqlToggle = document.getElementById('mysql-toggle');
+                const apacheToggle = document.getElementById('apache-toggle');
+                const mysqlDot = document.getElementById('mysql-status-dot');
+                const apacheDot = document.getElementById('apache-status-dot');
+                const portText = document.getElementById('mysql-port-text');
+                const btnFix = document.getElementById('btn-fix-config');
+
+                // Update MySQL
+                mysqlToggle.checked = d.running;
+                mysqlDot.style.background = d.installed ? (d.running ? 'var(--success)' : 'var(--warning)') : 'var(--danger)';
+                portText.innerText = `Porta: ${d.port}`;
+                btnFix.style.display = (d.port !== 3165 || !d.remoteAccess) ? 'block' : 'none';
+                if (d.running) loadDatabases();
+
+                // Update Apache
+                apacheToggle.checked = dA.running;
+                apacheDot.style.background = dA.installed ? (dA.running ? 'var(--success)' : 'var(--warning)') : 'var(--danger)';
+            } catch (e) { console.error("Erro ao carregar status MySQL/Apache:", e); }
+        }
+
+        async function toggleService(service, start) {
+            const endpoint = `/api/${service}/${start ? 'start' : 'stop'}`;
+            try {
+                const r = await fetch(endpoint, { method: 'POST' });
+                if (r.ok) {
+                    setTimeout(loadMySQLStatus, 2000);
+                } else {
+                    const d = await r.json();
+                    alert(`Erro ao ${start ? 'iniciar' : 'parar'} ${service}: ${d.error}`);
+                    loadMySQLStatus();
+                }
+            } catch (e) { 
+                alert(`Erro de conexão: ${e.message}`);
+                loadMySQLStatus();
+            }
+        }
+
+        async function startMySQL() {
+            const btn = document.getElementById('btn-start-mysql');
+            btn.innerText = 'Iniciando...';
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/mysql/start', { method: 'POST' });
+                if (r.ok) {
+                    alert("Comando de inicialização enviado. Aguarde alguns segundos...");
+                    setTimeout(loadMySQLStatus, 4000);
+                }
+            } catch (e) { alert("Erro ao iniciar MySQL: " + e.message); }
+            btn.innerText = 'Iniciar MySQL';
+            btn.disabled = false;
+        }
+
+        async function applyMySQLConfig() {
+            if (confirm("Isso alterará a porta do MySQL para 3165 e liberará o acesso IP. Deseja continuar?")) {
+                const r = await fetch('/api/mysql/apply-config', { method: 'POST' });
+                const d = await r.json();
+                alert(d.message || d.error);
+                loadMySQLStatus();
+            }
+        }
+
+        async function deleteDatabase(name) {
+            if (!confirm(`Tem certeza que deseja EXCLUIR o banco de dados "${name}"? Esta ação não pode ser desfeita.`)) return;
+            
+            try {
+                const r = await fetch('/api/mysql/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ dbName: name })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    alert("Banco de dados excluído com sucesso!");
+                    loadDatabases();
+                } else {
+                    alert("Erro ao excluir: " + d.error);
+                }
+            } catch (e) { alert("Erro de conexão: " + e.message); }
+        }
+        
+        async function loadDatabases() {
+            try {
+                const r = await fetch('/api/mysql/databases');
+                const d = await r.json();
+                const tbody = document.getElementById('db-table-body');
+                
+                if (d.error) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 2rem; color: #ef4444;">Erro ao conectar: ${d.error}</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = d.map(db => `
+                    <tr class="file-row">
+                        <td style="font-weight: 600;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                                ${db.name}
+                            </div>
+                        </td>
+                        <td>${db.user}</td>
+                        <td><span class="status-badge" style="font-size: 0.7rem; color: var(--success); border-color: var(--success);">Remoto (%)</span></td>
+                        <td style="display: flex; gap: 0.5rem; justify-content: flex-end; padding-right: 1.5rem;">
+                            <button class="btn-action" onclick="window.open('http://' + window.location.hostname + ':3136/phpmyadmin/index.php?db=${db.name}')" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                                phpMyAdmin
+                            </button>
+                            <button class="btn-action" onclick="deleteDatabase('${db.name}')" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-color: var(--danger); color: var(--danger);">
+                                Excluir
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error("Erro ao carregar bancos:", e); }
+        }
+
+        async function createDatabase() {
+            const dbName = document.getElementById('new-db-name').value;
+            const username = document.getElementById('new-db-user').value;
+            const password = document.getElementById('new-db-pass').value;
+
+            if (!dbName || !username || !password) return alert("Preencha todos os campos");
+
+            // Check status first
+            const statusRes = await fetch('/api/mysql/status');
+            const status = await statusRes.json();
+            if (!status.running) {
+                return alert("ERRO: O MySQL está parado! Clique em 'Iniciar MySQL' antes de criar um banco.");
+            }
+
+            const r = await fetch('/api/mysql/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ dbName, username, password })
+            });
+
+            if (r.ok) {
+                alert("Banco e usuário criados com sucesso!");
+                document.getElementById('create-db-modal').classList.remove('active');
+                loadDatabases();
+            } else {
+                const d = await r.json();
+                alert("Erro: " + d.error);
+            }
+        }
+
         function switchView(v) {
             // Update UI Sections
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
@@ -538,6 +861,7 @@
             }
             if (v === 'files') loadFiles();
             if (v === 'processes') { loadProcesses(); clearInterval(procInt); procInt = setInterval(loadProcesses, 5000); }
+            if (v === 'database') loadMySQLStatus();
         }
 
         async function loadFiles(p = '') {

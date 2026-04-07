@@ -12,6 +12,7 @@ const archiver = require('archiver');
 const session = require('express-session');
 const multer = require('multer');
 const unzipper = require('unzipper');
+const mysql = require('mysql2/promise');
 
 const app = express();
 const server = http.createServer(app);
@@ -282,6 +283,315 @@ app.post('/api/system/shutdown', checkAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// MySQL Universal Management Logic
+const getMySQLPaths = () => {
+  if (process.platform === 'win32') {
+    return {
+      bin: 'C:\\xampp\\mysql\\bin\\mysqld.exe',
+      config: 'C:\\xampp\\mysql\\bin\\my.ini',
+      phpmyadmin: 'http://localhost/phpmyadmin/'
+    };
+  }
+  return {
+    bin: '/usr/sbin/mysqld',
+    config: '/etc/mysql/mysql.conf.d/mysqld.cnf',
+    phpmyadmin: '/phpmyadmin/'
+  };
+};
+
+const getApachePaths = () => {
+  if (process.platform === 'win32') {
+    return {
+      bin: 'C:\\xampp\\apache\\bin\\httpd.exe',
+      config: 'C:\\xampp\\apache\\conf\\httpd.conf'
+    };
+  }
+  return {
+    bin: '/usr/sbin/apache2',
+    config: '/etc/apache2/apache2.conf'
+  };
+};
+
+app.get('/api/mysql/status', checkAuth, async (req, res) => {
+  const paths = getMySQLPaths();
+  const exists = fs.existsSync(paths.bin);
+  let port = 3306;
+  let remoteAccess = false;
+
+  if (exists && fs.existsSync(paths.config)) {
+    const content = await fsPromises.readFile(paths.config, 'utf8');
+    // Match port in [mysqld] section or first occurrence
+    const portMatch = content.match(/port\s*=\s*(\d+)/);
+    if (portMatch) port = parseInt(portMatch[1]);
+    remoteAccess = !content.includes('#bind-address') || content.includes('0.0.0.0');
+  }
+
+  // Try to connect to check if it's running
+  let running = false;
+  try {
+    const conn = await mysql.createConnection({ host: '127.0.0.1', port: port, user: 'root' });
+    await conn.end();
+    running = true;
+  } catch (e) {}
+
+  res.json({ 
+    installed: exists, 
+    running, 
+    port, 
+    remoteAccess,
+    path: paths.bin,
+    phpmyadmin: paths.phpmyadmin
+  });
+});
+
+app.post('/api/mysql/apply-config', checkAuth, async (req, res) => {
+  try {
+    const paths = getMySQLPaths();
+    if (!fs.existsSync(paths.config)) return res.status(404).json({ error: 'Configuração não encontrada' });
+
+    let content = await fsPromises.readFile(paths.config, 'utf8');
+    
+    // Change port everywhere to be sure
+    content = content.replace(/port\s*=\s*\d+/g, 'port=3165');
+    
+    // Enable remote access
+    if (content.includes('bind-address')) {
+      content = content.replace(/^bind-address\s*=.+/gm, '#bind-address = 0.0.0.0');
+    } else {
+      content = content.replace(/\[mysqld\]/g, '[mysqld]\nbind-address = 0.0.0.0');
+    }
+
+    await fsPromises.writeFile(paths.config, content);
+    res.json({ success: true, message: 'Configuração aplicada com sucesso (Porta 3165).' });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/mysql/start', checkAuth, async (req, res) => {
+  try {
+    const paths = getMySQLPaths();
+    if (!fs.existsSync(paths.bin)) return res.status(404).json({ error: 'Binário não encontrado' });
+
+    if (process.platform === 'win32') {
+      // KILL FIRST to avoid "ibdata1 locked" issues
+      require('child_process').exec('taskkill /F /IM mysqld.exe /T', () => {
+        const mysqlCmd = `"${paths.bin}" --defaults-file="${paths.config}" --standalone`;
+        require('child_process').exec(mysqlCmd, (err) => {
+          if (err) console.error("MySQL Spawn Error:", err);
+        });
+      });
+      // Wait a bit for it to start
+      setTimeout(() => res.json({ success: true }), 3000);
+    } else {
+      require('child_process').exec('sudo systemctl start mysql', (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      });
+    }
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/mysql/stop', checkAuth, async (req, res) => {
+  try {
+    if (process.platform === 'win32') {
+      require('child_process').exec('taskkill /F /IM mysqld.exe /T', (err) => {
+        if (err) return res.status(500).json({ error: 'Erro ao parar MySQL' });
+        res.json({ success: true });
+      });
+    } else {
+      require('child_process').exec('sudo systemctl stop mysql', (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      });
+    }
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.get('/api/mysql/databases', checkAuth, async (req, res) => {
+  try {
+    const statusRes = await fetch(`http://localhost:3000/api/mysql/status`, { headers: { cookie: req.headers.cookie } });
+    const status = await statusRes.json();
+    
+    const connection = await mysql.createConnection({ host: '127.0.0.1', port: status.port, user: 'root' });
+    const [rows] = await connection.query("SHOW DATABASES WHERE `Database` NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys', 'phpmyadmin')");
+    
+    const dbs = await Promise.all(rows.map(async (r) => {
+        const dbName = r.Database;
+        const [users] = await connection.query(`SELECT DISTINCT User FROM mysql.db WHERE \`Db\` = ?`, [dbName]);
+        return { name: dbName, user: users.map(u => u.User).join(', ') || 'root' };
+    }));
+
+    await connection.end();
+    res.json(dbs);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/mysql/create', checkAuth, async (req, res) => {
+  const { dbName, username, password } = req.body;
+  if (!dbName || !username || !password) return res.status(400).json({ error: 'Dados incompletos' });
+
+  try {
+    const statusRes = await fetch(`http://localhost:3000/api/mysql/status`, { headers: { cookie: req.headers.cookie } });
+    const status = await statusRes.json();
+
+    const connection = await mysql.createConnection({ host: '127.0.0.1', port: status.port, user: 'root' });
+    
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    await connection.query(`CREATE USER IF NOT EXISTS '${username}'@'%' IDENTIFIED BY '${password}'`);
+    await connection.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${username}'@'%'`);
+    await connection.query(`FLUSH PRIVILEGES`);
+
+    await connection.end();
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/mysql/delete', checkAuth, async (req, res) => {
+  const { dbName } = req.body;
+  if (!dbName) return res.status(400).json({ error: 'Nome do banco não informado' });
+
+  try {
+    const statusRes = await fetch(`http://localhost:3000/api/mysql/status`, { headers: { cookie: req.headers.cookie } });
+    const status = await statusRes.json();
+
+    const connection = await mysql.createConnection({ host: '127.0.0.1', port: status.port, user: 'root' });
+    await connection.query(`DROP DATABASE \`${dbName}\``);
+    await connection.end();
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.get('/api/apache/status', checkAuth, async (req, res) => {
+  const paths = getApachePaths();
+  const exists = fs.existsSync(paths.bin);
+  let running = false;
+  
+  try {
+    const { execSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'netstat -ano | findstr :3136' : 'lsof -i :3136';
+    const output = execSync(cmd).toString();
+    if (output.includes('LISTENING') || output.includes('httpd') || output.includes('LISTEN')) running = true;
+  } catch (e) {}
+
+  res.json({ installed: exists, running });
+});
+
+app.post('/api/apache/start', checkAuth, async (req, res) => {
+  try {
+    const paths = getApachePaths();
+    if (!fs.existsSync(paths.bin)) return res.status(404).json({ error: 'Apache não encontrado' });
+
+    if (process.platform === 'win32') {
+      // KILL FIRST
+      require('child_process').exec('taskkill /F /IM httpd.exe /T', () => {
+        require('child_process').exec(`"${paths.bin}"`, (err) => {
+          if (err) console.error("Apache Spawn Error:", err);
+        });
+      });
+      setTimeout(() => res.json({ success: true }), 2000);
+    } else {
+      require('child_process').exec('sudo systemctl start apache2', (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      });
+    }
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/apache/stop', checkAuth, async (req, res) => {
+  try {
+    if (process.platform === 'win32') {
+      require('child_process').exec('taskkill /F /IM httpd.exe /T', (err) => {
+        if (err) return res.status(500).json({ error: 'Erro ao parar Apache' });
+        res.json({ success: true });
+      });
+    } else {
+      require('child_process').exec('sudo systemctl stop apache2', (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      });
+    }
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+async function autoStartServices() {
+  console.log('[AUTO] Verificando serviços no boot...');
+  const mysqlPaths = getMySQLPaths();
+  const apachePaths = getApachePaths();
+
+  // 1. Force MySQL Config (Port 3165 + Remote Access)
+  if (fs.existsSync(mysqlPaths.config)) {
+    try {
+      let content = await fsPromises.readFile(mysqlPaths.config, 'utf8');
+      
+      // Update key_buffer to key_buffer_size to avoid warning
+      content = content.replace(/key_buffer\s*=/g, 'key_buffer_size =');
+      
+      if (!content.includes('port=3165')) {
+        console.log('[AUTO] Ajustando porta do MySQL para 3165...');
+        content = content.replace(/port\s*=\s*\d+/g, 'port=3165');
+        if (!content.includes('bind-address')) {
+            content = content.replace(/\[mysqld\]/g, '[mysqld]\nbind-address = 0.0.0.0');
+        } else {
+            content = content.replace(/^bind-address\s*=.+/gm, '#bind-address = 0.0.0.0');
+        }
+        await fsPromises.writeFile(mysqlPaths.config, content);
+      }
+    } catch (e) { console.error('[AUTO] Erro ao configurar MySQL:', e.message); }
+  }
+
+  // 2. Start MySQL if stopped (Force Kill existing first for Windows)
+  try {
+    if (process.platform === 'win32') {
+       console.log('[AUTO] Limpando instâncias de MySQL para evitar conflitos...');
+       require('child_process').execSync('taskkill /F /IM mysqld.exe /T /FI "STATUS eq RUNNING"');
+    }
+    
+    setTimeout(() => {
+        console.log('[AUTO] Iniciando MySQL na porta 3165...');
+        if (process.platform === 'win32') {
+          require('child_process').exec(`"${mysqlPaths.bin}" --defaults-file="${mysqlPaths.config}" --standalone`);
+        } else {
+          require('child_process').exec('sudo systemctl start mysql');
+        }
+    }, 1000);
+  } catch (e) {}
+
+  // 3. Start Apache (for phpMyAdmin) - Kill existing first for Windows
+  try {
+    const apachePaths = getApachePaths();
+    if (process.platform === 'win32' && fs.existsSync(apachePaths.config)) {
+       let content = await fsPromises.readFile(apachePaths.config, 'utf8');
+       if (!content.includes('Listen 3136')) {
+           console.log('[AUTO] Ajustando porta do Apache para 3136...');
+           content = content.replace(/^Listen\s+\d+/gm, 'Listen 3136');
+           content = content.replace(/^ServerName\s+localhost:\d+/gm, 'ServerName localhost:3136');
+           await fsPromises.writeFile(apachePaths.config, content);
+       }
+    }
+
+    if (process.platform === 'win32') {
+       console.log('[AUTO] Iniciando Apache (Porta 3136)...');
+       require('child_process').execSync('taskkill /F /IM httpd.exe /T /FI "STATUS eq RUNNING"');
+       setTimeout(() => {
+         require('child_process').exec(`"${apachePaths.bin}"`);
+       }, 500);
+    }
+  } catch (e) {}
+
+  // 4. Force phpMyAdmin Config (Port 3165)
+  try {
+    const pmaConfig = 'C:\\xampp\\phpMyAdmin\\config.inc.php';
+    if (process.platform === 'win32' && fs.existsSync(pmaConfig)) {
+       let content = await fsPromises.readFile(pmaConfig, 'utf8');
+       if (!content.includes("'port'] = '3165'")) {
+         console.log('[AUTO] Ajustando porta no phpMyAdmin para 3165...');
+         content = content.replace("['host'] = '127.0.0.1';", "['host'] = '127.0.0.1';\n$cfg['Servers'][$i]['port'] = '3165';");
+         await fsPromises.writeFile(pmaConfig, content);
+       }
+    }
+  } catch (e) {}
+}
+
 io.on('connection', async (socket) => {
   console.log('Client connected');
   
@@ -329,7 +639,8 @@ io.on('connection', async (socket) => {
   });
 });
 
-const PORT = 3000;
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  await autoStartServices();
 });
