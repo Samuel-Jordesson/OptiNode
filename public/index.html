@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiNode - Painel de Controle</title>
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --sidebar: #1e293b;
+            --accent: #2563eb;
+            --text-main: #1e293b;
+            --text-dim: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
+
+        .sidebar { width: 260px; background: var(--sidebar); color: #fff; display: flex; flex-direction: column; height: 100vh; position: fixed; left: 0; top: 0; z-index: 1000; }
+        .sidebar-header { padding: 2rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-nav { flex: 1; padding: 1.5rem 0; overflow-y: auto; display: flex; flex-direction: column; }
+        .nav-item { padding: 0.875rem 1.5rem; display: flex; align-items: center; gap: 0.875rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; font-weight: 500; font-size: 0.9rem; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        .nav-item.active { background: var(--accent); color: #fff; }
+        .nav-item svg { width: 18px; height: 18px; stroke-width: 2; }
+        .sidebar-footer { padding: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #64748b; display: flex; flex-direction: column; gap: 0.5rem; }
+        .footer-item { display: flex; align-items: center; gap: 0.5rem; }
+
+        .main-content { flex: 1; margin-left: 260px; padding: 2.5rem; overflow-y: auto; height: 100vh; }
+        header { margin-bottom: 2.5rem; display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 1.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.75rem; }
+        .status-badge { background: #fff; padding: 0.5rem 1rem; border-radius: 99px; border: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+        .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.75rem; margin-bottom: 1.75rem; }
+        .card { background: #fff; border: 1px solid var(--border); padding: 1.75rem; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-title { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--text-dim); margin-bottom: 1.25rem; }
+        .card-title span { margin-left: auto; color: var(--text-main); font-size: 1.1rem; }
+        
+        .chart-container { position: relative; height: 180px; width: 100%; margin-top: 0.5rem; }
+        
+        .info-list { display: flex; flex-direction: column; gap: 1rem; }
+        .info-item { display: flex; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid #f1f5f9; }
+        .info-item:last-child { border-bottom: none; }
+
+        .view-section { display: none; animation: fadeIn 0.4s ease-out; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        #terminal-view { height: calc(100vh - 220px); background: #0a0a0a; border-radius: 0.75rem; padding: 1.25rem; border: 1px solid #334155; overflow: hidden; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); }
+        #terminal-container { height: 100%; width: 100%; }
+
+        .breadcrumb { background: #fff; padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+        .breadcrumb-item { cursor: pointer; color: var(--accent); font-weight: 600; }
+        .file-list-card { background: #fff; border: 1px solid var(--border); border-radius: 0.75rem; overflow: hidden; }
+        .file-table { width: 100%; border-collapse: collapse; }
+        .file-table th { background: #f8fafc; padding: 1rem; font-size: 0.75rem; text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid var(--border); text-align: left; }
+        .file-table td { padding: 0.875rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .file-row:hover { background: #f1f5f9; cursor: pointer; }
+        
+        .action-bar { margin-bottom: 1rem; display: flex; gap: 1rem; }
+        .btn-action { background: #fff; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: #fff; width: 85%; height: 85vh; border-radius: 1rem; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff; }
+        .modal-header h3 { font-size: 1.1rem; font-weight: 600; color: var(--text-main); }
+        .modal-header button { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-dim); }
+        .modal-body { flex: 1; padding: 1.5rem; overflow: auto; background: #f8fafc; color: #1e293b; font-family: 'Consolas', 'Monaco', monospace; line-height: 1.5; white-space: pre-wrap; font-size: 0.9rem; border-top: 1px solid var(--border); }
+        
+        .context-menu { position: fixed; background: #fff; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 0.5rem; width: 170px; z-index: 3000; display: none; padding: 0.5rem 0; }
+        .menu-item { padding: 0.625rem 1rem; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; }
+        .menu-item:hover { background: #f1f5f9; }
+        
+        /* Login Overlay */
+        #login-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #f8fafc; z-index: 5000; display: flex; align-items: center; justify-content: center; 
+        }
+        .login-card { 
+            width: 100%; max-width: 400px; padding: 3.5rem; background: #fff;
+            border: 1px solid var(--border); border-radius: 1.5rem; 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        .login-card h2 { margin-bottom: 2rem; font-weight: 700; color: var(--sidebar); font-size: 1.75rem; }
+        .login-input { 
+            width: 100%; padding: 0.875rem 1.25rem; margin-bottom: 1.25rem; 
+            border: 1px solid var(--border); border-radius: 0.75rem; 
+            font-size: 0.95rem; transition: all 0.2s; background: #fdfdfd;
+        }
+        .login-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+        .btn-login { 
+            width: 100%; padding: 1rem; background: var(--accent); color: #fff; 
+            border: none; border-radius: 0.75rem; font-weight: 600; cursor: pointer; 
+            font-size: 1rem; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+        .btn-login:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+
+        .logout-item { 
+            margin-top: auto; color: #ef4444 !important; 
+            border-top: 1px solid rgba(255,255,255,0.05); 
+            padding-top: 1.5rem !important;
+        }
+        .logout-item:hover { background: rgba(239, 68, 68, 0.1) !important; color: #f87171 !important; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2 style="display: flex; align-items: center; gap: 0.75rem; color: #fff;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                OptiNode
+            </h2>
+        </div>
+        <div class="sidebar-nav">
+            <div id="nav-dashboard" class="nav-item active" onclick="switchView('dashboard')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                Dashboard
+            </div>
+            <div id="nav-terminal" class="nav-item" onclick="switchView('terminal')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                Terminal
+            </div>
+            <div id="nav-files" class="nav-item" onclick="switchView('files')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path></svg>
+                Arquivos
+            </div>
+            <div id="nav-processes" class="nav-item" onclick="switchView('processes')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                Processos
+            </div>
+            <div class="nav-item logout-item" onclick="handleLogout()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                Sair do Sistema
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <div class="footer-item" id="footer-host">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12"></path><rect x="2" y="16" width="20" height="4" rx="2"></rect></svg>
+                Host: ---
+            </div>
+            <div class="footer-item" id="footer-kernel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Kernel: ---
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header>
+            <h1 id="view-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); margin-right: 0.5rem;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                Dashboard
+            </h1>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button class="btn-action" onclick="sysAction('reboot')" style="border-color: #f59e0b; color: #f59e0b; font-weight: 600;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                    Reboot
+                </button>
+                <button class="btn-action" onclick="sysAction('shutdown')" style="border-color: #ef4444; color: #ef4444; font-weight: 600;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M12 18V6"></path><path d="M6 12h12"></path></svg>
+                    Shutdown
+                </button>
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Online</span>
+                </div>
+            </div>
+        </header>
+
+        <section id="dashboard-view" class="view-section active">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <div class="card-title">Uso de CPU <span id="cpu-percent">0%</span></div>
+                    <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Memória RAM <span id="ram-percent">0%</span></div>
+                    <div class="chart-container"><canvas id="ramChart"></canvas></div>
+                </div>
+            </div>
+            <div class="dashboard-grid">
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-title">Sistema</div>
+                    <div class="info-list">
+                        <div class="info-item"><span>Hostname:</span><span id="host-name">---</span></div>
+                        <div class="info-item"><span>Processador:</span><span id="cpu-model">---</span></div>
+                        <div class="info-item"><span>Total RAM:</span><span id="ram-total">---</span></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Armazenamento</div>
+                    <div id="storage-list" class="info-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="terminal-view" class="view-section">
+            <div id="terminal-container"></div>
+        </section>
+
+        <section id="files-view" class="view-section">
+            <div id="breadcrumb-list" class="breadcrumb"></div>
+            <div class="action-bar">
+                <button class="btn-action" onclick="initCreateFolder()">Nova Pasta</button>
+                <button class="btn-action" onclick="initCreateFile()">Novo Arquivo</button>
+            </div>
+            <div class="file-list-card">
+                <table class="file-table">
+                    <thead><tr><th>Nome</th><th>Tamanho</th><th>Modificado</th></tr></thead>
+                    <tbody id="file-table-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="processes-view" class="view-section">
+            <div class="file-list-card">
+                <table class="file-table">
+                    <thead><tr><th>Processo</th><th>PID</th><th>CPU %</th><th>Memória %</th><th>Ação</th></tr></thead>
+                    <tbody id="process-table-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="context-menu" class="context-menu">
+        <div class="menu-item" onclick="initRename()">Renomear</div>
+        <div class="menu-item danger" onclick="initDelete()">Apagar</div>
+        <div class="menu-item" onclick="initCompress()">Compactar (ZIP)</div>
+        <div class="menu-item" onclick="initExtract()" id="menu-extract" style="display:none; border-top: 1px solid var(--border); padding-top: 0.5rem;">Extrair (Unzip)</div>
+        <div class="menu-item" onclick="initDownload()">Baixar</div>
+    </div>
+
+    <div id="file-viewer-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modal-filename">Arquivo</h3><button onclick="closeModal()">×</button></div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="login-overlay">
+        <form class="login-card" onsubmit="event.preventDefault(); handleLogin();">
+            <h2>OptiNode Login</h2>
+            <input type="text" id="login-user" placeholder="Usuário" class="login-input" required>
+            <input type="password" id="login-pass" placeholder="Senha" class="login-input" required>
+            <button type="submit" class="btn-login">Entrar no Painel</button>
+            <p id="login-error" style="color:#ef4444; display:none; margin-top:1.25rem; font-size: 0.9rem; font-weight: 600;">Credenciais inválidas.</p>
+        </form>
+    </div>
+
+    <script>
+        let cpuChart, ramChart, term, procInt;
+        let currentPath = '', selectedItemPath = '';
+        const socket = io();
+
+        async function initCharts() {
+            const opt = { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 }, x: { display: false } }, elements: { point: { radius: 0 } }, plugins: { legend: { display: false } } };
+            cpuChart = new Chart(document.getElementById('cpuChart'), { type: 'line', data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#2563eb', fill: true, backgroundColor: 'rgba(37,99,235,0.1)' }] }, options: opt });
+            ramChart = new Chart(document.getElementById('ramChart'), { type: 'line', data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#10b981', fill: true, backgroundColor: 'rgba(16,185,129,0.1)' }] }, options: opt });
+        }
+
+        async function checkAuth() {
+            const r = await fetch('/api/auth/status');
+            const d = await r.json();
+            if (d.authenticated) {
+                document.getElementById('login-overlay').style.display = 'none';
+                initCharts();
+            } else {
+                document.getElementById('login-overlay').style.display = 'flex';
+            }
+        }
+
+        async function handleLogin() {
+            const u = document.getElementById('login-user').value;
+            const p = document.getElementById('login-pass').value;
+            const res = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, password:p}) });
+            if (res.ok) window.location.reload();
+            else document.getElementById('login-error').style.display = 'block';
+        }
+
+        async function handleLogout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.reload();
+        }
+
+        socket.on('connect', () => {
+            document.getElementById('status-text').innerText = 'Online';
+            document.querySelector('.status-dot').style.background = 'var(--success)';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('status-text').innerText = 'Desconectado';
+            document.querySelector('.status-dot').style.background = '#ef4444';
+        });
+
+        socket.on('dynamic_data', data => {
+            document.getElementById('cpu-percent').innerText = data.cpuUsage + '%';
+            document.getElementById('ram-percent').innerText = data.ramPercentage + '%';
+            if (cpuChart && data.history) {
+                cpuChart.data.datasets[0].data = data.history.map(h => h.cpuUsage);
+                cpuChart.update('none');
+                ramChart.data.datasets[0].data = data.history.map(h => h.ramPercentage);
+                ramChart.update('none');
+            }
+
+            const storageList = document.getElementById('storage-list');
+            if (storageList && data.storage) {
+                storageList.innerHTML = data.storage.map(drive => `
+                    <div class="storage-item" style="margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem; font-weight: 600;">
+                            <span>Drive ${drive.mount}</span>
+                            <span style="color: var(--text-dim)">${drive.used} GB / ${drive.size} GB</span>
+                        </div>
+                        <div class="progress-container" style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div class="progress-bar" style="width: ${drive.use}%; height: 100%; background: #64748b; transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        });
+
+        socket.on('static_data', data => {
+            document.getElementById('host-name').innerText = data.hostname;
+            document.getElementById('cpu-model').innerText = data.cpuModel;
+            document.getElementById('ram-total').innerText = data.totalRam;
+            
+            // Update footer while preserving icons
+            const hostFooter = document.getElementById('footer-host');
+            const kernelFooter = document.getElementById('footer-kernel');
+            
+            if (hostFooter) {
+                const icon = hostFooter.querySelector('svg').outerHTML;
+                hostFooter.innerHTML = `${icon} Host: ${data.hostname}`;
+            }
+            if (kernelFooter) {
+                const icon = kernelFooter.querySelector('svg').outerHTML;
+                kernelFooter.innerHTML = `${icon} Kernel: ${data.release || '---'}`;
+            }
+        });
+
+        function switchView(v) {
+            // Update UI Sections
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(v + '-view').classList.add('active');
+
+            // Update Sidebar Highlighting
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            const activeNav = document.getElementById('nav-' + v);
+            const titleEl = document.getElementById('view-title');
+            
+            if (activeNav) {
+                activeNav.classList.add('active');
+                // Sync Title and Icon
+                titleEl.innerHTML = activeNav.innerHTML;
+            }
+
+            // View specific logic
+            if (v === 'terminal') { 
+                if(!term) { 
+                    term = new Terminal({ 
+                        theme: { background: '#0a0a0a', cursor: '#2563eb' },
+                        fontSize: 14,
+                        fontFamily: 'Consolas, "Courier New", monospace'
+                    }); 
+                    const fitAddon = new FitAddon.FitAddon();
+                    term.loadAddon(fitAddon);
+                    term.open(document.getElementById('terminal-container')); 
+                    fitAddon.fit();
+                    
+                    term.onData(d => socket.emit('terminal-input', d)); 
+                    socket.on('terminal-output', d => term.write(d)); 
+                    window.addEventListener('resize', () => fitAddon.fit());
+                } else {
+                    // Refit on switch
+                    setTimeout(() => {
+                        const fitAddon = new FitAddon.FitAddon();
+                        term.loadAddon(fitAddon);
+                        fitAddon.fit();
+                    }, 100);
+                }
+            }
+            if (v === 'files') loadFiles();
+            if (v === 'processes') { loadProcesses(); clearInterval(procInt); procInt = setInterval(loadProcesses, 5000); }
+        }
+
+        async function loadFiles(p = '') {
+            const r = await fetch(`/api/files${p ? '?path='+encodeURIComponent(p.replace(/\\/g, '/')) : ''}`);
+            const d = await r.json();
+            currentPath = d.currentPath.replace(/\\/g, '/');
+            
+            // Build Breadcrumbs
+            const parts = currentPath.split('/');
+            document.getElementById('breadcrumb-list').innerHTML = parts.map((part, i) => `
+                <span class="breadcrumb-item" onclick="loadFiles('${parts.slice(0, i + 1).join('/')}')">${part || 'Raiz'}</span>
+                ${i < parts.length - 1 ? '<span>/</span>' : ''}
+            `).join('');
+
+            const folderIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #f59e0b; margin-right: 0.5rem;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v11z"></path></svg>`;
+            const fileIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #64748b; margin-right: 0.5rem;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+
+            document.getElementById('file-table-body').innerHTML = d.files.map(f => {
+                const cleanPath = f.path.replace(/\\/g, '/');
+                return `
+                    <tr class="file-row" 
+                        oncontextmenu="showMenu(event, '${cleanPath}')"
+                        onclick="${f.isDirectory ? `loadFiles('${cleanPath}')` : `viewFile('${cleanPath}')`}">
+                        <td style="display: flex; align-items: center;">
+                            ${f.isDirectory ? folderIcon : fileIcon}
+                            <span>${f.name}</span>
+                        </td>
+                        <td>${f.size}</td>
+                        <td>${new Date(f.birthtime).toLocaleDateString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function viewFile(p) {
+            const r = await fetch(`/api/file-content?path=${encodeURIComponent(p)}`);
+            const d = await r.json();
+            if (d.error) return alert(d.error);
+            document.getElementById('modal-filename').innerText = p.split('/').pop();
+            document.getElementById('modal-body').innerText = d.content;
+            document.getElementById('file-viewer-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('file-viewer-modal').classList.remove('active');
+        }
+
+        async function sysAction(a) {
+            if (confirm(`Confirmar ${a}?`)) {
+                await fetch(`/api/system/${a}`, { method: 'POST' });
+                alert(`${a} comando enviado.`);
+            }
+        }
+
+        async function initExtract() {
+            await fetch('/api/unzip', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({zipPath: selectedItemPath}) });
+            loadFiles(currentPath);
+        }
+
+        function initDownload() {
+            window.open(`/api/download?path=${encodeURIComponent(selectedItemPath)}`);
+        }
+
+        function showMenu(e, p) { 
+            e.preventDefault(); 
+            selectedItemPath = p; 
+            const m = document.getElementById('context-menu');
+            document.getElementById('menu-extract').style.display = p.toLowerCase().endsWith('.zip') ? 'block' : 'none';
+            m.style.display = 'block'; 
+            m.style.left = e.pageX + 'px'; 
+            m.style.top = e.pageY + 'px'; 
+        }
+
+        // Drag & Drop Upload
+        const fv = document.getElementById('files-view');
+        fv.ondragover = e => { e.preventDefault(); fv.style.background = '#f0f9ff'; };
+        fv.ondragleave = () => fv.style.background = 'none';
+        fv.ondrop = async e => {
+            e.preventDefault();
+            fv.style.background = 'none';
+            const files = e.dataTransfer.files;
+            for (let f of files) {
+                const fd = new FormData();
+                fd.append('file', f);
+                fd.append('dest', currentPath);
+                await fetch('/api/upload', { method: 'POST', body: fd });
+            }
+            loadFiles(currentPath);
+        };
+
+        async function kill(pid) {
+            if (confirm(`Kill PID ${pid}?`)) {
+                await fetch('/api/kill-process', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pid}) });
+                loadProcesses();
+            }
+        }
+
+        async function loadProcesses() {
+            try {
+                const r = await fetch('/api/processes');
+                const d = await r.json();
+                document.getElementById('process-table-body').innerHTML = d.map(p => `
+                    <tr class="file-row">
+                        <td style="font-weight: 600;">${p.name}</td>
+                        <td>${p.pid}</td>
+                        <td><span style="color: ${p.cpu > 50 ? '#ef4444' : 'inherit'}">${p.cpu}%</span></td>
+                        <td>${p.mem}%</td>
+                        <td>
+                            <button class="btn-action" onclick="kill(${p.pid})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-color: #ef4444; color: #ef4444;">Kill</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error("Erro ao carregar processos:", e); }
+        }
+
+        async function initRename() {
+            const n = prompt("Novo nome:", selectedItemPath.split('/').pop());
+            if (n) {
+                await fetch('/api/rename', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({oldPath: selectedItemPath, newName: n}) });
+                loadFiles(currentPath);
+            }
+        }
+
+        async function initDelete() {
+            if (confirm("Apagar permanentemente?")) {
+                await fetch(`/api/delete?path=${encodeURIComponent(selectedItemPath)}`, { method: 'DELETE' });
+                loadFiles(currentPath);
+            }
+        }
+
+        async function initCompress() {
+            await fetch('/api/compress', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({targetPath: selectedItemPath}) });
+            loadFiles(currentPath);
+        }
+
+        async function initCreateFolder() {
+            const f = prompt("Nome da pasta:");
+            if (f) {
+                await fetch('/api/create-folder', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({currentPath, folderName: f}) });
+                loadFiles(currentPath);
+            }
+        }
+
+        async function initCreateFile() {
+            const f = prompt("Nome do arquivo:");
+            if (f) {
+                await fetch('/api/create-file', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({currentPath, fileName: f}) });
+                loadFiles(currentPath);
+            }
+        }
+
+        document.addEventListener('click', () => document.getElementById('context-menu').style.display = 'none');
+        window.onload = checkAuth;
+    </script>
+</body>
+</html>
