@@ -856,7 +856,9 @@ io.on('connection', async (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, async () => {
+server.listen(PORT, '0.0.0.0', async () => {
+  const localIP = getLocalIP();
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Network Access: http://${localIP}:${PORT}`);
   await autoStartServices();
 });

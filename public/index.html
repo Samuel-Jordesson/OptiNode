@@ -31,10 +31,18 @@
         .progress-container { width: 100%; background: #e2e8f0; border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden; }
         .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
         .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; padding: 1.5rem 0; }
-        .app-card { background: #fff; border: 1px solid var(--border); border-radius: 1rem; padding: 2rem 1.5rem; text-align: center; position: relative; transition: all 0.2s; cursor: default; }
-        .app-card:hover { border-color: var(--accent); }
-        .app-card .uninstall-btn { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); opacity: 0; transition: 0.3s; background: var(--danger); color: #fff; border: none; padding: 0.4rem 1rem; border-radius: 0.5rem; font-size: 0.8rem; }
-        .app-card:hover .uninstall-btn { opacity: 1; bottom: 1.5rem; }
+        .app-card { background: #fff; border: 1px solid var(--border); border-radius: 1rem; padding: 2rem 1.5rem; text-align: center; position: relative; transition: all 0.2s; cursor: pointer; }
+        .app-card:hover { border-color: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .app-menu-btn { position: absolute; top: 1rem; right: 1rem; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: all 0.2s; color: #94a3b8; }
+        .app-card:hover .app-menu-btn { opacity: 1; }
+        .app-menu-btn:hover { background: #f1f5f9; color: var(--text-main); }
+        
+        .app-dropdown { position: absolute; top: 3.5rem; right: 1rem; background: #fff; border: 1px solid var(--border); border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 140px; display: none; z-index: 100; overflow: hidden; }
+        .app-dropdown.active { display: block; animation: slideIn 0.2s ease-out; }
+        .app-dropdown div { padding: 0.75rem 1rem; font-size: 0.825rem; text-align: left; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main); }
+        .app-dropdown div:hover { background: #f8fafc; }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
         .app-icon { width: 64px; height: 64px; margin-bottom: 1rem; }
 
         /* Sidebar Sub-menus */
@@ -804,10 +812,20 @@
             currentApps.forEach(app => {
                 html += `
                     <div class="app-card" onclick="window.open('${app.url}')">
+                        <div class="app-menu-btn" onclick="event.stopPropagation(); toggleAppMenu(event, this)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                        </div>
+                        <div class="app-dropdown">
+                            <div onclick="event.stopPropagation(); window.open('${app.url}')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg> Gerenciar
+                            </div>
+                            <div onclick="event.stopPropagation(); hideAllMenus(); uninstallApp('${app.name}', '${app.dbName}')" style="color: var(--danger)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg> Desinstalar
+                            </div>
+                        </div>
                         <img src="https://s.w.org/style/images/about/WordPress-logotype-wmark.png" class="app-icon">
                         <h4>${app.name}</h4>
                         <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem;">${app.type}</p>
-                        <button class="uninstall-btn" onclick="event.stopPropagation(); uninstallApp('${app.name}', '${app.dbName}')">Desinstalar</button>
                     </div>
                 `;
             });
@@ -850,7 +868,7 @@
         }
 
         async function uninstallApp(appName, dbName) {
-            if (!confirm(`Tem certeza que deseja desinstalar "${appName}"? Isso apagará a pasta e o banco de dados!`)) return;
+            if (!confirm(`Tem certeza que deseja desinstalar o app '${appName}' e apagar o banco '${dbName}'?`)) return;
 
             try {
                 const r = await fetch('/api/apps/uninstall', {
